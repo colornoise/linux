@@ -728,7 +728,7 @@ next_page:
 		 *  calculates new pages address and adds page table entries to page table
 		 */
 
-		if ( apriori_flag == 1 ) {
+		if ( apriori_flag >= 1 ) {
 			fill_page_table_manually(mm, vma ,start, page_increm);
 		}
 		else if (apriori_flag == 2) {

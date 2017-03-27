@@ -4,6 +4,7 @@
 #define MAX_PROC_NAME_LEN 16
 
 char apriori_paging_process[CONFIG_NR_CPUS][MAX_PROC_NAME_LEN];
+int start_tracking_apriori = 0;
 
 int is_process_of_apriori_paging(const char* proc_name);
 

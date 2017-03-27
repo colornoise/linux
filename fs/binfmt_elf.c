@@ -49,7 +49,7 @@
 
 static int load_elf_binary(struct linux_binprm *bprm);
 static unsigned long elf_map(struct file *, unsigned long, struct elf_phdr *,
-				int, int, unsigned long);
+				int, int, unsigned long, bool);
 
 #ifdef CONFIG_USELIB
 static int load_elf_library(struct file *);
@@ -335,7 +335,7 @@ create_elf_tables(struct linux_binprm *bprm, struct elfhdr *exec,
 
 static unsigned long elf_map(struct file *filep, unsigned long addr,
 		struct elf_phdr *eppnt, int prot, int type,
-		unsigned long total_size)
+		unsigned long total_size, bool remap)
 {
 	unsigned long map_addr;
 	unsigned long size = eppnt->p_filesz + ELF_PAGEOFFSET(eppnt->p_vaddr);
@@ -357,35 +357,55 @@ static unsigned long elf_map(struct file *filep, unsigned long addr,
 	* So we first map the 'big' image - and unmap the remainder at
 	* the end. (which unmap is needed for ELF images with holes.)
 	*/
-	if (total_size) {
+	if (total_size && remap) {
 		total_size = ELF_PAGEALIGN(total_size);
 		if(unlikely(mm->identity_mapping_en >= 1)) {
-			unsigned long phys_addr = 0;
+			bool remapped = false;
+			struct vm_area_struct *prev;
 			struct vm_area_struct *phys_vma, *vma;
-			bool locked = false;
-			map_addr = vm_mmap(filep, addr, total_size, prot, type | MAP_POPULATE, off);
-			if(get_pa(map_addr) > 0) {
-				vma = find_vma(mm, map_addr);
-				phys_addr = get_pa(map_addr);
-				phys_vma = find_vma(mm, phys_addr);
-
-				printk("BEFORE CODE remap vm_start VA:%lx PA:%lx\n", vma->vm_start, get_pa(vma->vm_start));
-				printk("BEFORE CODE remap vm_end VA:%lx PA:%lx\n", vma->vm_start+total_size-1, get_pa(vma->vm_start+total_size-1));
-
-				if(phys_addr > TASK_SIZE - total_size)
-					printk("CODE remap: Error 1: No space\n");
-				else if(phys_vma && (phys_addr + total_size > phys_vma->vm_start)){
-					printk("CODE remap: Error 2: vma issues\n");
-					if(phys_vma)
-						printk("Conflicting vma start:%lx\n", phys_vma->vm_start);
+			while (remapped == false) {
+				unsigned long phys_addr = 0;
+				bool locked = false;
+				map_addr = vm_mmap(filep, addr, total_size, 
+						PROT_READ|PROT_WRITE, MAP_PRIVATE | MAP_POPULATE, off);
+				if(do_mprotect_pkey(map_addr, total_size, prot, -1) <0) {
+					printk("Error updating elf_map permissions\n");		
 				}
-				else if(get_pa(vma->vm_start)!=0 && mm->identity_mapping_en >= 2){
-					map_addr = move_vma(vma, vma->vm_start, PAGE_ALIGN(total_size), PAGE_ALIGN(total_size), phys_addr, &locked);
+				if(get_pa(map_addr) > 0) {
 					vma = find_vma(mm, map_addr);
-					printk("AFTER CODE remap vm_start VA:%lx PA:%lx\n", vma->vm_start, get_pa(vma->vm_start));
-					printk("AFTER CODE remap vm_end VA:%lx PA:%lx\n", vma->vm_start+total_size-1, get_pa(vma->vm_start+total_size-1));
-				}
+					phys_addr = get_pa(map_addr);
+					phys_vma = find_vma(mm, phys_addr);
+
+					printk("BEFORE CODE remap vm_start VA:%lx PA:%lx\n", 
+							vma->vm_start, get_pa(vma->vm_start));
+					printk("BEFORE CODE remap vm_end VA:%lx PA:%lx\n", 
+							vma->vm_start+total_size-1, get_pa(vma->vm_start+total_size-1));
+
+					if(phys_addr > TASK_SIZE - total_size)
+						printk("CODE remap: Error 1: No space\n");
+					else if(phys_vma && (phys_addr + total_size > phys_vma->vm_start)){
+						printk("CODE remap: Error 2: vma issues\n");
+						if(phys_vma)
+							printk("Conflicting vma start:%lx\n", phys_vma->vm_start);
+					}
+					else if(get_pa(vma->vm_start)!=0 && mm->identity_mapping_en >= 2){
+						remapped = true;
+						map_addr = move_vma(vma, vma->vm_start, PAGE_ALIGN(total_size), 
+								PAGE_ALIGN(total_size), phys_addr, &locked);
+						vma = find_vma(mm, map_addr);
+						printk("AFTER CODE remap vm_start VA:%lx PA:%lx\n", 
+							vma->vm_start, get_pa(vma->vm_start));
+						printk("AFTER CODE remap vm_end VA:%lx PA:%lx\n", 
+							vma->vm_start+total_size-1, get_pa(vma->vm_start+total_size-1));
+					}
+					if(remapped == false) {
+						vm_munmap(map_addr, total_size);
+						printk("Retrying mapping\n");
+					}
+				}	
 			}
+			vma = find_vma(mm, map_addr);
+			vma->vm_flags = type;
 		} 
 		else
 			map_addr = vm_mmap(filep, addr, total_size, prot, type, off);
@@ -600,7 +620,7 @@ out:
 					load_addr = -vaddr;
 
 				map_addr = elf_map(interpreter, load_addr + vaddr,
-						eppnt, elf_prot, elf_type, total_size);
+						eppnt, elf_prot, elf_type, total_size, false);
 				if(current->mm->identity_mapping_en >= 1) {
 
 					printk("load-interp text map_addr:%lx\n", map_addr);
@@ -980,7 +1000,7 @@ static int load_elf_binary(struct linux_binprm *bprm)
 		}
 		// WHere text/code segment is mapped
 		error = elf_map(bprm->file, load_bias + vaddr, elf_ppnt,
-			elf_prot, elf_flags, total_size);
+			elf_prot, elf_flags, total_size, true);
 		if(total_size > 0) {
 			base_addr = error;
 			base_size = total_size;

@@ -1501,16 +1501,23 @@ unsigned long do_mmap(struct file *file, unsigned long addr,
         {
             if (file && ((prot == (PROT_READ | PROT_WRITE)))) {// || (prot == (PROT_READ | PROT_EXEC)))) {
                 //mm->apriori_paging_mfile_en = 1;
-                printk("Apriori Paging for memory mapped files\n");
+                printk("Apriori Paging for memory mapped files (RW) \n");
                 *apriori_flag = 2; // memory mapped files
                 *populate = len;
             }
+	    else if (file && ((prot == (PROT_READ | PROT_EXEC)))) {// || (prot == (PROT_READ | PROT_EXEC)))) {
+                //mm->apriori_paging_mfile_en = 1;
+                printk("Apriori Paging DISABLED for memory mapped files (RE) \n");
+//                *apriori_flag = 2; // memory mapped files
+//                *populate = len;
+            }
+
         }
 	else if (mm &&  (mm->identity_mapping_en >= 2)  
 		&&  ( flags == ( MAP_PRIVATE | MAP_POPULATE | MAP_EXECUTABLE | MAP_DENYWRITE ))){
-            if (file && ((prot == (PROT_READ | PROT_EXEC)))){ 
-                printk("Apriori Paging for memory mapped code segment\n");
-                *apriori_flag = 2; // memory mapped files
+            if (file && ((prot == (PROT_READ | PROT_WRITE)))){ 
+                printk("Apriori Paging HACK for memory mapped code segment\n");
+                *apriori_flag = 1; // memory mapped files
                 *populate = len;
             }
 	
@@ -1577,12 +1584,12 @@ SYSCALL_DEFINE6(mmap_pgoff, unsigned long, addr, unsigned long, len,
 
 	flags &= ~(MAP_EXECUTABLE | MAP_DENYWRITE);
 
-        if ( !file 
-	&& (( flags &  MAP_APRIORI_PAGING ) ==  MAP_APRIORI_PAGING 
+        if (  
+	(( flags &  MAP_APRIORI_PAGING ) ==  MAP_APRIORI_PAGING 
 	|| ( mm &&  (mm->apriori_paging_en == 1)  &&  
 		( ((flags & (MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED))  == ( MAP_PRIVATE | MAP_ANONYMOUS )) 
 		|| ( flags == MAP_PRIVATE )
-                || ( flags == ( MAP_PRIVATE | MAP_POPULATE)) )))) {
+                || ( flags == ( MAP_PRIVATE | MAP_POPULATE)))))) {
 		int j;
 		unsigned long nr_pages = len/PAGE_SIZE;
 //		printk("nr_pages:%lu\n", nr_pages);

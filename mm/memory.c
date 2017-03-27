@@ -2903,8 +2903,8 @@ int __do_fault(struct vm_fault *vmf)
 	}
 
 	if (unlikely(!(ret & VM_FAULT_LOCKED))) {
-		if(current->mm->identity_mapping_en>=2)
-			printk("Page:%lx is Locked!\n", vmf->address);
+//		if(current->mm->identity_mapping_en>=2)
+//			printk("Page:%lx is Locked!\n", vmf->address);
 		lock_page(vmf->page);
 	}
 	else 
@@ -3094,6 +3094,9 @@ int alloc_set_pte(struct vm_fault *vmf, struct mem_cgroup *memcg,
 		inc_mm_counter_fast(vma->vm_mm, MM_ANONPAGES);
 		page_add_new_anon_rmap(page, vma, vmf->address, false);
 		mem_cgroup_commit_charge(page, memcg, false, false);
+/*		if(unlikely(current->identity_mapping_en>=2)){
+		}
+		else */
 		lru_cache_add_active_or_unevictable(page, vma);
 	} else {
 		inc_mm_counter_fast(vma->vm_mm, mm_counter_file(page));
@@ -4415,6 +4418,7 @@ int fill_page_table_manually_cow(struct mm_struct *mm , struct vm_area_struct *v
 	vmf.pte = ptep;
 //	init_page_count(new_page);	
 	atomic_set(&new_page->_refcount, 1);
+	//set_page_refcounted(new_page);
 
 //        if (unlikely(!pte_same(*ptep, orig_pte))) {
 //            pte_unmap_unlock(ptep, ptl);
@@ -4422,10 +4426,14 @@ int fill_page_table_manually_cow(struct mm_struct *mm , struct vm_area_struct *v
 //            page_cache_release(fault_page);
 //            goto uncharge_out;
 //        }
-	
-        alloc_set_pte(&vmf, memcg, new_page);
+	if((vma->vm_flags & VM_DENYWRITE) == VM_DENYWRITE) {
+		vmf.flags = vmf.flags & ~FAULT_FLAG_WRITE;
+        	alloc_set_pte(&vmf, memcg, new_page);
+	}
+	else 
+        	alloc_set_pte(&vmf, memcg, new_page);
         pte_unmap_unlock(ptep, ptl);
-        unlock_page(vmf.page);
+        if(PageLocked(vmf.page))	unlock_page(vmf.page);
         put_page(vmf.page);
 
 
@@ -4594,7 +4602,7 @@ int fill_page_table_manually(struct mm_struct *mm , struct vm_area_struct *vma, 
 
     }
 	/* We converted one big page into multiple smaller pages, so overcounted by one */
-        dec_mm_counter_fast(mm, MM_ANONPAGES); 
+//        dec_mm_counter_fast(mm, MM_ANONPAGES); 
 	vma->apriori_en=1;
 
     return 0;

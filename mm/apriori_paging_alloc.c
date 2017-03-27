@@ -28,6 +28,7 @@ SYSCALL_DEFINE3(apriori_paging_alloc, const char __user**, proc_name, unsigned i
 
 
     if ( option > 0 ) {
+	start_tracking_apriori = 1;
         for ( i = 0 ; i < CONFIG_NR_CPUS ; i++ ) {
             if ( i < num_procs )
                 ret = strncpy_from_user(proc, proc_name[i], MAX_PROC_NAME_LEN);
@@ -38,6 +39,7 @@ SYSCALL_DEFINE3(apriori_paging_alloc, const char __user**, proc_name, unsigned i
     }
 
     if ( option < 0 ) {
+	start_tracking_apriori = 1;
         for ( i = 0 ; i < CONFIG_NR_CPUS ; i++ ) {
             if( i < num_procs ) {
                 ret = kstrtoul(proc_name[i],10,&pid);
@@ -62,6 +64,9 @@ int is_process_of_apriori_paging(const char* proc_name)
 {
 
     unsigned int i;
+
+    if (start_tracking_apriori == 0)
+	return 0;
 
     for ( i = 0 ; i < CONFIG_NR_CPUS ; i++ )     {
         if (!strncmp(proc_name,apriori_paging_process[i],MAX_PROC_NAME_LEN))

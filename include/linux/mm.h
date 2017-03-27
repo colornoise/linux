@@ -2058,6 +2058,9 @@ static inline void mm_populate(unsigned long addr, unsigned long len,
 
 extern unsigned long get_pa(unsigned long);
 
+extern int do_mprotect_pkey(unsigned long, size_t,
+                unsigned long, int);
+
 /* These take the mm semaphore themselves */
 extern int __must_check vm_brk(unsigned long, unsigned long);
 extern int vm_munmap(unsigned long, size_t);
