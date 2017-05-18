@@ -317,7 +317,7 @@ unsigned long get_pa(unsigned long addr) {
 	struct vm_area_struct *vma = find_vma(current->mm, addr);
 	if(follow_pfn(vma, addr, &pa) < 0) { 
 		printk("Unable to retrieve pfn for addr:%lx\n", addr);
-		return -1;
+		return 0;
 	}
 	return (pa << PAGE_SHIFT);
 }

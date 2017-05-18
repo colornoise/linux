@@ -622,9 +622,8 @@ out:
 				map_addr = elf_map(interpreter, load_addr + vaddr,
 						eppnt, elf_prot, elf_type, total_size, false);
 				if(current->mm->identity_mapping_en >= 1) {
-
 					printk("load-interp text map_addr:%lx\n", map_addr);
-					printk("load-interp total_size:%lx\n", total_size);
+					printk("load-interp total_size:%lu\n", total_size);
 				} 
 				total_size = 0;
 				if (!*interp_map_addr)
@@ -1005,6 +1004,10 @@ static int load_elf_binary(struct linux_binprm *bprm)
 			base_addr = error;
 			base_size = total_size;
 		}
+		if(current->mm->identity_mapping_en >= 1) {
+			printk("load-binary text map_addr:%lx\n", base_addr);
+			printk("load-binary total_size:%lu\n", total_size);
+		} 
 		if (BAD_ADDR(error)) {
 			retval = IS_ERR((void *)error) ?
 				PTR_ERR((void*)error) : -EINVAL;

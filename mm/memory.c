@@ -4401,6 +4401,15 @@ int fill_page_table_manually_cow(struct mm_struct *mm , struct vm_area_struct *v
             put_page(new_page);
             return VM_FAULT_OOM;
         }
+
+	if (vma->vm_flags & VM_WRITE)
+            pte = pte_mkwrite(pte_mkdirty(pte));
+	else
+	    pte = pte_wrprotect(pte);
+
+	if (vma->vm_flags & VM_EXEC)
+	    pte = pte_mkexec(pte);
+
 	vmf.memcg = memcg;
         //printk(KERN_INFO "vpn: 0x%lx - ppn: 0x%lx\n", new_addr, pfn);
 	
@@ -4418,6 +4427,7 @@ int fill_page_table_manually_cow(struct mm_struct *mm , struct vm_area_struct *v
 	vmf.pte = ptep;
 //	init_page_count(new_page);	
 	atomic_set(&new_page->_refcount, 1);
+	atomic_set(&vmf.page->_refcount, 1);
 	//set_page_refcounted(new_page);
 
 //        if (unlikely(!pte_same(*ptep, orig_pte))) {
@@ -4433,6 +4443,7 @@ int fill_page_table_manually_cow(struct mm_struct *mm , struct vm_area_struct *v
 	else 
         	alloc_set_pte(&vmf, memcg, new_page);
         pte_unmap_unlock(ptep, ptl);
+	vmf.page->mapping = NULL;
         if(PageLocked(vmf.page))	unlock_page(vmf.page);
         put_page(vmf.page);
 
@@ -4589,10 +4600,16 @@ int fill_page_table_manually(struct mm_struct *mm , struct vm_area_struct *vma, 
 
 	if (vma->vm_flags & VM_WRITE)
             pte = pte_mkwrite(pte_mkdirty(pte));
+	else
+	    pte = pte_wrprotect(pte);
 
-        inc_mm_counter_fast(mm, MM_ANONPAGES);
-
-        page_add_new_anon_rmap(temp,vma,new_addr, false);
+	if (vma->vm_flags & VM_EXEC)
+	    pte = pte_mkexec(pte);
+	
+	if(vma->anon_vma) {
+		inc_mm_counter_fast(mm, MM_ANONPAGES);
+        	page_add_new_anon_rmap(temp,vma,new_addr, false);
+	}
 
         set_pte_at(mm, new_addr, ptep ,pte);
 

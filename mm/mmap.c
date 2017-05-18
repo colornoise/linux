@@ -1474,7 +1474,6 @@ unsigned long do_mmap(struct file *file, unsigned long addr,
 
     if ( !IS_ERR_VALUE(addr) ) {
         if ( (( flags &  MAP_APRIORI_PAGING ) ==  MAP_APRIORI_PAGING ) || ( mm &&  mm->apriori_paging_en == 1  &&  ( ( flags & (MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED) ) == ( MAP_PRIVATE | MAP_ANONYMOUS ))))
-//        if ( (( flags &  MAP_APRIORI_PAGING ) ==  MAP_APRIORI_PAGING ) || ( mm &&  mm->apriori_paging_en == 1 && (!((flags & (MAP_FIXED | MAP_PRIVATE | MAP_DENYWRITE)) == (MAP_FIXED | MAP_PRIVATE | MAP_DENYWRITE)))))
         {
             *apriori_flag = 1;
             *populate = len;
@@ -1484,6 +1483,11 @@ unsigned long do_mmap(struct file *file, unsigned long addr,
             *apriori_flag = 1;
             *populate = len;
 	}
+/*	else if( mm &&  (mm->apriori_paging_en == 1)  &&  (  flags == MAP_PRIVATE ))
+	{
+            *apriori_flag = 1;
+            *populate = len;
+	}*/
 /*	else if( mm &&  mm->apriori_paging_en == 1  &&  ( ( flags & (MAP_EXECUTABLE | MAP_DENYWRITE | MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED) ) == (MAP_FIXED | MAP_PRIVATE )))
 	{
             *apriori_flag = 1;
@@ -1499,13 +1503,13 @@ unsigned long do_mmap(struct file *file, unsigned long addr,
              ( mm &&  (mm->apriori_paging_en == 1)  &&  ( flags == MAP_PRIVATE )) ||
              ( mm &&  (mm->apriori_paging_en == 1)  &&  ( flags == ( MAP_PRIVATE | MAP_POPULATE))))
         {
-            if (file && ((prot == (PROT_READ | PROT_WRITE)))) {// || (prot == (PROT_READ | PROT_EXEC)))) {
+            if (file && ((prot == (PROT_READ | PROT_WRITE)))) {
                 //mm->apriori_paging_mfile_en = 1;
                 printk("Apriori Paging for memory mapped files (RW) \n");
                 *apriori_flag = 2; // memory mapped files
                 *populate = len;
             }
-	    else if (file && ((prot == (PROT_READ | PROT_EXEC)))) {// || (prot == (PROT_READ | PROT_EXEC)))) {
+	    else if (file && ((prot == (PROT_READ | PROT_EXEC)))) {
                 //mm->apriori_paging_mfile_en = 1;
                 printk("Apriori Paging DISABLED for memory mapped files (RE) \n");
 //                *apriori_flag = 2; // memory mapped files
@@ -1517,7 +1521,7 @@ unsigned long do_mmap(struct file *file, unsigned long addr,
 		&&  ( flags == ( MAP_PRIVATE | MAP_POPULATE | MAP_EXECUTABLE | MAP_DENYWRITE ))){
             if (file && ((prot == (PROT_READ | PROT_WRITE)))){ 
                 printk("Apriori Paging HACK for memory mapped code segment\n");
-                *apriori_flag = 1; // memory mapped files
+                *apriori_flag = 2; // memory mapped files
                 *populate = len;
             }
 	
