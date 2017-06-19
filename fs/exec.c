@@ -724,7 +724,7 @@ int setup_arg_pages(struct linux_binprm *bprm,
 			if(phys_vma)
 				printk("Conflicting vma start:%lx\n", phys_vma->vm_start);
 		}
-		else if(get_pa(new_vma->vm_start)!=0 && mm->identity_mapping_en >= 2){
+		else if(get_pa(new_vma->vm_start)!=0 && mm->identity_mapping_en >= 1){
 			unsigned long temp_base = move_vma(new_vma, new_vma->vm_start, PAGE_ALIGN(new_size), PAGE_ALIGN(new_size), phys_addr, &locked);
 			stack_top = temp_base + new_size - 4096; //Leaving space at the end
 			printk("AFTER stack_base:%lx stack_top:%lx\n", temp_base, stack_top);

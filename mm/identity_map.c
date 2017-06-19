@@ -36,6 +36,7 @@ SYSCALL_DEFINE3(init_identity_map, const char __user**, proc_name, unsigned int,
                 temp = strncpy(proc,"",MAX_PROC_NAME_LEN);
             temp = strncpy(identity_mapping_process_stable[i], proc, MAX_PROC_NAME_LEN-1);
         }
+	printk("Identity Mapping enabled! (Stable)\n");
     }
     else if ( option > 1 ) {
 	    start_tracking = 1;
@@ -46,6 +47,7 @@ SYSCALL_DEFINE3(init_identity_map, const char __user**, proc_name, unsigned int,
                 temp = strncpy(proc,"",MAX_PROC_NAME_LEN);
             temp = strncpy(identity_mapping_process_testing[i], proc, MAX_PROC_NAME_LEN-1);
         }
+	printk("Identity Mapping enabled! (Testing)\n");
     }
 
     if ( option < 0 ) {
@@ -61,7 +63,6 @@ SYSCALL_DEFINE3(init_identity_map, const char __user**, proc_name, unsigned int,
     }
 
  
-    printk("Identity Mapping enabled!\n");
     return 0;
 }
 

@@ -335,7 +335,7 @@ unsigned long vm_mmap(struct file *file, unsigned long addr,
 		return -EINVAL;
 	if(unlikely(current->mm->identity_mapping_en >= 1)) {
 		if (( flag &  MAP_APRIORI_PAGING ) ==  MAP_APRIORI_PAGING 
-			|| ( current->mm &&  (current->mm->identity_mapping_en == 2)
+			|| ( current->mm &&  (current->mm->identity_mapping_en == 1)
 			&& ( ((flag & (MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED))  == ( MAP_PRIVATE | MAP_ANONYMOUS )) 
 			|| ( flag == MAP_PRIVATE )
 			|| ( flag == ( MAP_PRIVATE | MAP_POPULATE)) 
