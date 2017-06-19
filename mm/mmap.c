@@ -1636,15 +1636,15 @@ SYSCALL_DEFINE6(mmap_pgoff, unsigned long, addr, unsigned long, len,
 		printk("BEFORE MMAP remap vm_start VA:%lx PA:%lx\n", vma->vm_start, get_pa(vma->vm_start));
 		printk("BEFORE MMAP remap vm_end VA:%lx PA:%lx\n", vma->vm_end-4096, get_pa(vma->vm_end-4096));
 		
-		if(phys_addr > TASK_SIZE - len)
+		if(phys_addr > TASK_SIZE - orig_len)
 			printk("MMAP remap: Error 1: No space\n");
-		else if(phys_vma && (phys_addr + len > phys_vma->vm_start)){
+		else if(phys_vma && (phys_addr + orig_len > phys_vma->vm_start)){
 			printk("MMAP remap: Error 2: vma issues\n");
 			if(phys_vma)
 				printk("Conflicting vma start:%lx\n", phys_vma->vm_start);
 		}
-		else if(get_pa(vma->vm_start)!=0 && current->mm->identity_mapping_en >= 2){
-			retval = move_vma(vma, vma->vm_start, PAGE_ALIGN(len), PAGE_ALIGN(len), phys_addr, &locked);
+		else if(get_pa(vma->vm_start)!=0 && current->mm->identity_mapping_en >= 1){
+			retval = move_vma(vma, vma->vm_start, PAGE_ALIGN(orig_len), PAGE_ALIGN(orig_len), phys_addr, &locked);
 			vma = find_vma(mm, retval);
 			printk("AFTER MMAP remap old->vm_start VA:%lx PA:%lx\n", vma->vm_start, get_pa(vma->vm_start));
 			printk("AFTER MMAP remap old->vm_end VA:%lx PA:%lx\n", vma->vm_end-4096, get_pa(vma->vm_end-4096));
