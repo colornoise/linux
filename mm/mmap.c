@@ -1588,6 +1588,7 @@ SYSCALL_DEFINE6(mmap_pgoff, unsigned long, addr, unsigned long, len,
 
 	flags &= ~(MAP_EXECUTABLE | MAP_DENYWRITE);
 
+	retry:
         if (  
 	(( flags &  MAP_APRIORI_PAGING ) ==  MAP_APRIORI_PAGING 
 	|| ( mm &&  (mm->apriori_paging_en == 1)  &&  
@@ -1642,8 +1643,10 @@ SYSCALL_DEFINE6(mmap_pgoff, unsigned long, addr, unsigned long, len,
 			printk("MMAP remap: Error 1: No space\n");
 		else if(phys_vma && (phys_addr + len > phys_vma->vm_start)){
 			printk("MMAP remap: Error 2: vma issues\n");
-			if(phys_vma)
+			if(phys_vma) {
 				printk("Conflicting vma start:%lx\n", phys_vma->vm_start);
+				goto retry;
+			}
 		}
 		else if(get_pa(vma->vm_start)!=0 && current->mm->identity_mapping_en >= 1){
 			retval = move_vma(vma, vma->vm_start, PAGE_ALIGN(len), PAGE_ALIGN(len), phys_addr, &locked);
