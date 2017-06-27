@@ -274,6 +274,13 @@ static inline pte_t pte_mkdevmap(pte_t pte)
 	return pte_set_flags(pte, _PAGE_SPECIAL|_PAGE_DEVMAP);
 }
 
+static inline pud_t pud_set_flags(pud_t pud, pudval_t set)
+{
+	pudval_t v = native_pud_val(pud);
+
+	return __pud(v | set);
+}
+
 static inline pmd_t pmd_set_flags(pmd_t pmd, pmdval_t set)
 {
 	pmdval_t v = native_pmd_val(pmd);
@@ -331,6 +338,16 @@ static inline pmd_t pmd_mkwrite(pmd_t pmd)
 static inline pmd_t pmd_mknotpresent(pmd_t pmd)
 {
 	return pmd_clear_flags(pmd, _PAGE_PRESENT | _PAGE_PROTNONE);
+}
+
+static inline pmd_t pmd_mkformat(pmd_t pmd)
+{
+	return pmd_set_flags(pmd, _PAGE_SOFTW1);
+}
+
+static inline pud_t pud_mkformat(pud_t pud)
+{
+	return pud_set_flags(pud, _PAGE_SOFTW1);
 }
 
 #ifdef CONFIG_HAVE_ARCH_SOFT_DIRTY
@@ -530,6 +547,11 @@ static inline int pmd_present(pmd_t pmd)
 	return pmd_flags(pmd) & (_PAGE_PRESENT | _PAGE_PROTNONE | _PAGE_PSE);
 }
 
+static inline int pmd_marked(pmd_t pmd) 
+{
+	return pmd_flags(pmd) & (_PAGE_SOFTW1);
+}
+
 #ifdef CONFIG_NUMA_BALANCING
 /*
  * These work without NUMA balancing but the kernel does not care. See the
@@ -618,6 +640,11 @@ static inline unsigned long pages_to_mb(unsigned long npg)
 static inline int pud_none(pud_t pud)
 {
 	return (native_pud_val(pud) & ~(_PAGE_KNL_ERRATUM_MASK)) == 0;
+}
+
+static inline int pud_marked(pud_t pud) 
+{
+return pud_flags(pud) & (_PAGE_SOFTW1);
 }
 
 static inline int pud_present(pud_t pud)

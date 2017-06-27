@@ -3553,7 +3553,7 @@ static inline bool vma_is_accessible(struct vm_area_struct *vma)
  * See filemap_fault() and __lock_page_or_retry().
  */
 static int handle_pte_fault(struct vm_fault *vmf, unsigned long apriori_flag,
-				int apriori_order)
+				int apriori_order, bool mark_format)
 {
 	pte_t entry;
 
@@ -3569,6 +3569,9 @@ static int handle_pte_fault(struct vm_fault *vmf, unsigned long apriori_flag,
 		/* See comment in pte_alloc_one_map() */
 		if (pmd_trans_unstable(vmf->pmd) || pmd_devmap(*vmf->pmd))
 			return 0;
+		if (apriori_flag && mark_format) {
+			*vmf->pmd = pmd_mkformat(*vmf->pmd);
+		}
 		/*
 		 * A regular pmd is established and it can't morph into a huge
 		 * pmd from under us anymore at this point because we hold the
@@ -3660,19 +3663,75 @@ static int __handle_mm_fault(struct vm_area_struct *vma, unsigned long address,
 	struct mm_struct *mm = vma->vm_mm;
 	pgd_t *pgd;
 	pud_t *pud;
-
+	pmd_t *pmd;
+	bool mark_format = false;
+	
 	pgd = pgd_offset(mm, address);
+	if (apriori_flag == 1) {
+		pud = pud_offset(pgd, address);
+		// No PUD, so accept sizes over 32 MB
+		if (pud_none(*pud) || pud_bad(*pud)) {
+			if (apriori_order >= (25-12)) { 
+				mark_format = true;
+				printk("No PUD, accepted size over 32 MB:%d\n", apriori_order);
+			}
+		}
+		// PUD exists, already marked previously, so accept sizes over 32MB
+		else if(pud_marked(*pud)) {
+			if (apriori_order >= (25-12)) {
+				mark_format = true;
+				printk("PUD marked, accepted size over 32 MB:%d\n", apriori_order);
+			}
+		}
+		// PUD exists, unmarked, so accept sizes over 1 GB
+		else {
+			if (apriori_order >= (30-12)) {
+				mark_format = true;
+				printk("PUD unmarked, accepted size over 1 GB:%d\n", apriori_order);
+			}
+		}
+	}
 	pud = pud_alloc(mm, pgd, address);
 	if (!pud)
 		return VM_FAULT_OOM;
+	if (mark_format) {
+		*pud = pud_mkformat(*pud);
+		mark_format = false;
+	}
+	if (apriori_flag == 1) {
+		pmd = pmd_offset(pud, address);
+		// No PUD, so accept sizes over 64 KB
+		if (pmd_none(*pmd) || pmd_bad(*pmd)) {
+			if (apriori_order >= (16-12)) {
+				mark_format = true;
+				printk("No PMD, accepted size over 64 KB:%d\n", apriori_order);
+			}
+		}
+		// PUD exists, already marked previously, so accept sizes over 64KB
+		else if(pmd_marked(*pmd)) {
+			if (apriori_order >= (16-12)) {
+				mark_format = true;
+				printk("PMD unmarked, accepted size over 64 KB:%d\n", apriori_order);
+			}
+		}
+		// PUD exists, unmarked, so accept sizes over 2 MB
+		else {
+			if (apriori_order >= (21-12)) {
+				mark_format = true;
+				printk("PMD unmarked, accepted size over 2 MB:%d\n", apriori_order);
+			}
+		}
+	}
 	vmf.pmd = pmd_alloc(mm, pud, address);
+
 	if (!vmf.pmd)
 		return VM_FAULT_OOM;
 	if (pmd_none(*vmf.pmd) && transparent_hugepage_enabled(vma)) {
 		int ret = create_huge_pmd(&vmf);
 		if (!(ret & VM_FAULT_FALLBACK))
 			return ret;
-	} else {
+	}
+	else {
 		pmd_t orig_pmd = *vmf.pmd;
 		int ret;
 
@@ -3693,7 +3752,7 @@ static int __handle_mm_fault(struct vm_area_struct *vma, unsigned long address,
 		}
 	}
 
-	return handle_pte_fault(&vmf, apriori_flag, apriori_order);
+	return handle_pte_fault(&vmf, apriori_flag, apriori_order, mark_format);
 }
 
 /*
@@ -4625,5 +4684,3 @@ int fill_page_table_manually(struct mm_struct *mm , struct vm_area_struct *vma, 
     return 0;
 }
 //EXPORT_SYMBOL(fill_page_table_manually);
-
-
