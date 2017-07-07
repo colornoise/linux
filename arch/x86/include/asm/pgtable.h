@@ -342,12 +342,12 @@ static inline pmd_t pmd_mknotpresent(pmd_t pmd)
 
 static inline pmd_t pmd_mkformat(pmd_t pmd)
 {
-	return pmd_set_flags(pmd, _PAGE_SOFTW1);
+	return pmd_set_flags(pmd, _PAGE_SOFTW2);
 }
 
 static inline pud_t pud_mkformat(pud_t pud)
 {
-	return pud_set_flags(pud, _PAGE_SOFTW1);
+	return pud_set_flags(pud, _PAGE_SOFTW2);
 }
 
 #ifdef CONFIG_HAVE_ARCH_SOFT_DIRTY
@@ -549,7 +549,7 @@ static inline int pmd_present(pmd_t pmd)
 
 static inline int pmd_marked(pmd_t pmd) 
 {
-	return pmd_flags(pmd) & (_PAGE_SOFTW1);
+	return pmd_flags(pmd) & (_PAGE_SOFTW2);
 }
 
 #ifdef CONFIG_NUMA_BALANCING
@@ -628,7 +628,8 @@ static inline pte_t *pte_offset_kernel(pmd_t *pmd, unsigned long address)
 
 static inline int pmd_bad(pmd_t pmd)
 {
-	return (pmd_flags(pmd) & ~_PAGE_USER) != _KERNPG_TABLE;
+	return (((pmd_flags(pmd) & ~_PAGE_USER) != _KERNPG_TABLE) &&
+		((pmd_flags(pmd) & ~_PAGE_USER) != (_KERNPG_TABLE | _PAGE_SOFTW2)));
 }
 
 static inline unsigned long pages_to_mb(unsigned long npg)
@@ -644,7 +645,7 @@ static inline int pud_none(pud_t pud)
 
 static inline int pud_marked(pud_t pud) 
 {
-return pud_flags(pud) & (_PAGE_SOFTW1);
+return pud_flags(pud) & (_PAGE_SOFTW2);
 }
 
 static inline int pud_present(pud_t pud)
@@ -678,7 +679,8 @@ static inline int pud_large(pud_t pud)
 
 static inline int pud_bad(pud_t pud)
 {
-	return (pud_flags(pud) & ~(_KERNPG_TABLE | _PAGE_USER)) != 0;
+	return (((pud_flags(pud) & ~_PAGE_USER) != _KERNPG_TABLE) &&
+		((pud_flags(pud) & ~_PAGE_USER) != (_KERNPG_TABLE | _PAGE_SOFTW2)));
 }
 #else
 static inline int pud_large(pud_t pud)

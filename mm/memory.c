@@ -3569,7 +3569,7 @@ static int handle_pte_fault(struct vm_fault *vmf, unsigned long apriori_flag,
 		/* See comment in pte_alloc_one_map() */
 		if (pmd_trans_unstable(vmf->pmd) || pmd_devmap(*vmf->pmd))
 			return 0;
-		if (apriori_flag && mark_format) {
+		if (current->mm->identity_mapping_en >=2 && mark_format) {
 			*vmf->pmd = pmd_mkformat(*vmf->pmd);
 		}
 		/*
@@ -3667,7 +3667,7 @@ static int __handle_mm_fault(struct vm_area_struct *vma, unsigned long address,
 	bool mark_format = false;
 	
 	pgd = pgd_offset(mm, address);
-	if (apriori_flag == 1) {
+	if (current->mm->identity_mapping_en >= 2) {
 		pud = pud_offset(pgd, address);
 		// No PUD, so accept sizes over 32 MB
 		if (pud_none(*pud) || pud_bad(*pud)) {
@@ -3698,7 +3698,7 @@ static int __handle_mm_fault(struct vm_area_struct *vma, unsigned long address,
 		*pud = pud_mkformat(*pud);
 		mark_format = false;
 	}
-	if (apriori_flag == 1) {
+	if (current->mm->identity_mapping_en >= 2) {
 		pmd = pmd_offset(pud, address);
 		// No PUD, so accept sizes over 64 KB
 		if (pmd_none(*pmd) || pmd_bad(*pmd)) {
