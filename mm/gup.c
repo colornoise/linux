@@ -671,8 +671,15 @@ retry:
 			ret = faultin_page(tsk, vma, start, &foll_flags,
 					nonblocking, apriori_flag, &apriori_fault_flags,
 					apriori_order);
+            if (apriori_flag == 1) {
+                printk("faultin_page returned %d\n", ret);
+                if(!page)
+                    printk("Page not created\n");
+            }
 			switch (ret) {
 			case 0:
+                if (apriori_flag == 1)
+                    printk("Retrying faultin_page\n");
 				goto retry;
 			case -EFAULT:
 			case -ENOMEM:
