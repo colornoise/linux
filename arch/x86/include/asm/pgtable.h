@@ -350,6 +350,12 @@ static inline pud_t pud_mkformat(pud_t pud)
 	return pud_set_flags(pud, _PAGE_SOFTW2);
 }
 
+static inline pgd_t pgd_mkformat(pgd_t pgd)
+{
+    pgdval_t v = native_pgd_val(pgd);
+    return __pgd(v | _PAGE_SOFTW2);
+
+}
 #ifdef CONFIG_HAVE_ARCH_SOFT_DIRTY
 static inline int pte_soft_dirty(pte_t pte)
 {
@@ -658,6 +664,11 @@ static inline unsigned long pud_page_vaddr(pud_t pud)
 	return (unsigned long)__va(pud_val(pud) & pud_pfn_mask(pud));
 }
 
+static inline int pgd_marked(pgd_t pgd) 
+{
+return pgd_flags(pgd) & (_PAGE_SOFTW2);
+}
+
 /*
  * Currently stuck as a macro due to indirect forward reference to
  * linux/mmzone.h's __section_mem_map_addr() definition:
@@ -719,7 +730,8 @@ static inline pud_t *pud_offset(pgd_t *pgd, unsigned long address)
 
 static inline int pgd_bad(pgd_t pgd)
 {
-	return (pgd_flags(pgd) & ~_PAGE_USER) != _KERNPG_TABLE;
+	return (((pgd_flags(pgd) & ~_PAGE_USER) != _KERNPG_TABLE) &&
+		((pgd_flags(pgd) & ~_PAGE_USER) != (_KERNPG_TABLE | _PAGE_SOFTW2)));
 }
 
 static inline int pgd_none(pgd_t pgd)

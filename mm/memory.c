@@ -603,7 +603,7 @@ int __pte_alloc(struct mm_struct *mm, pmd_t *pmd, unsigned long address)
 	 * seen in-order. See the alpha page table accessors for the
 	 * smp_read_barrier_depends() barriers in page table walking code.
 	 */
-	smp_wmb(); /* Could be smp_wmb__xxx(before|after)_spin_lock */
+    smp_wmb(); /* Could be smp_wmb__xxx(before|after)_spin_lock */
 
 	ptl = pmd_lock(mm, pmd);
 	if (likely(pmd_none(*pmd))) {	/* Has another populated it ? */
@@ -2769,8 +2769,8 @@ static int do_anonymous_page(struct vm_fault *vmf, unsigned long apriori_flag,
 	struct page *page;
 	pte_t entry;
 
-    if (apriori_flag == 1) 
-        printk("In do_anon_page with mark_pmd:%d\n", mark_pmd);
+//    if (apriori_flag == 1) 
+//        printk("In do_anon_page with mark_pmd:%d\n", mark_pmd);
 
 	/* File mapping without ->vm_ops ? */
 	if (vma->vm_flags & VM_SHARED)
@@ -2793,14 +2793,15 @@ static int do_anonymous_page(struct vm_fault *vmf, unsigned long apriori_flag,
 	if (pte_alloc(vma->vm_mm, vmf->pmd, vmf->address))
 		return VM_FAULT_OOM;
 
-    if ((apriori_flag == 1) && mark_pmd) {
+/*    if ((apriori_flag == 1) && mark_pmd) {
         if (current->mm->identity_mapping_en >=2) {
             printk("Before mkformat: %lx\n", *vmf->pmd);
             *vmf->pmd = pmd_mkformat(*vmf->pmd);
             printk("After mkformat: %lx\n", *vmf->pmd);
         }
     }
-	/* See the comment in pte_alloc_one_map() */
+	*/
+    /* See the comment in pte_alloc_one_map() */
 	if (unlikely(pmd_trans_unstable(vmf->pmd)))
 		return 0;
 
@@ -3616,7 +3617,7 @@ static int handle_pte_fault(struct vm_fault *vmf, unsigned long apriori_flag,
 			return do_fault(vmf, apriori_flag, apriori_order);
 		}
 	}
-
+    /*
     if ((apriori_flag == 1) && mark_pmd) {
         if (current->mm->identity_mapping_en >=2) {
             printk("Before mkformat: %lx\n", *vmf->pmd);
@@ -3624,7 +3625,7 @@ static int handle_pte_fault(struct vm_fault *vmf, unsigned long apriori_flag,
             printk("After mkformat: %lx\n", *vmf->pmd);
         }
     }
-
+    */
     if (!pte_present(vmf->orig_pte))
         return do_swap_page(vmf);
 
@@ -3691,7 +3692,7 @@ static int __handle_mm_fault(struct vm_area_struct *vma, unsigned long address,
         }   
     }
 	pgd = pgd_offset(mm, address);
-    if (apriori_flag == 1) {
+/*    if (apriori_flag == 1) {
         if (current->mm->identity_mapping_en >= 2) {
             pud = pud_offset(pgd, address);
             // No PUD, so accept sizes over 32 MB
@@ -3720,10 +3721,12 @@ static int __handle_mm_fault(struct vm_area_struct *vma, unsigned long address,
             }
         }
     }
+*/
     pud = pud_alloc(mm, pgd, address);
     if (!pud)
         return VM_FAULT_OOM;
-    if (apriori_flag == 1) {
+
+/*    if (apriori_flag == 1) {
         printk("pud=%lx\n", *pud);
     }
     if (apriori_flag == 1) {
@@ -3752,8 +3755,9 @@ static int __handle_mm_fault(struct vm_area_struct *vma, unsigned long address,
             }
         }
     }
+*/
     vmf.pmd = pmd_alloc(mm, pud, address);
-    if (apriori_flag == 1) {
+/*    if (apriori_flag == 1) {
         printk("pud=%lx\n", *pud);
     }
 
@@ -3762,7 +3766,7 @@ static int __handle_mm_fault(struct vm_area_struct *vma, unsigned long address,
         *pud = pud_mkformat(*pud);
         printk("After mkformat: %lx\n", *pud);
 	} 
-
+*/
     if (!vmf.pmd)
         return VM_FAULT_OOM;
     if (pmd_none(*vmf.pmd) && transparent_hugepage_enabled(vma)) {
@@ -4413,6 +4417,7 @@ int fill_page_table_manually_cow(struct mm_struct *mm , struct vm_area_struct *v
 	    .gfp_mask = __get_fault_gfp_mask(vma),
     };
 
+    printk("fill_page_table_manually_cow: addr:%lx size=%u\n", addr, 4096*nr_pages);
     pgd = pgd_offset(mm, addr);
     if (pgd_none(*pgd) || pgd_bad(*pgd))
         printk(KERN_INFO "Bad pgd");
@@ -4576,6 +4581,64 @@ int fill_page_table_manually_cow(struct mm_struct *mm , struct vm_area_struct *v
 
 //EXPORT_SYMBOL(fill_page_table_manually_cow);
 
+void mark_pud_if_appropriate(pud_t *pud, unsigned int nr_pages) 
+{
+    bool mark = false;
+    if (pud_none(*pud) || pud_bad(*pud)) {
+        if (nr_pages >= (1 << (25-12))) {
+            mark = true;
+            printk("MP: No pud, accepted size over 64 KB:%d\n", nr_pages);
+        }
+    }
+    // PUD exists, already marked previously, so accept sizes over 64KB
+    else if(pud_marked(*pud)) {
+        if (nr_pages >= (1 << (25-12))) {
+//            printk("MP: pud marked, accepted size over 64 KB:%d\n", nr_pages);
+        }
+    }
+    // PUD exists, unmarked, so accept sizes over 2 MB
+    else {
+        if (nr_pages >= (1 << (30-12))) {
+            mark = true;
+            printk("MP: pud unmarked, accepted size over 2 MB:%d\n", nr_pages);
+        }
+    }
+    if (mark) {
+        *pud = pud_mkformat(*pud);
+        smp_wmb();
+        printk("PUD After mkformat: %lx\n", *pud);
+    }
+}
+
+void mark_pmd_if_appropriate(pmd_t *pmd, unsigned int nr_pages) 
+{
+    bool mark = false;
+    if (pmd_none(*pmd) || pmd_bad(*pmd)) {
+        if (nr_pages >= (1 << (16-12))) {
+            mark = true;
+            printk("MP: No PMD, accepted size over 64 KB:%d\n", nr_pages);
+        }
+    }
+    // PUD exists, already marked previously, so accept sizes over 64KB
+    else if(pmd_marked(*pmd)) {
+        if (nr_pages >= (1 << (16-12))) {
+//            printk("MP: PMD marked, accepted size over 64 KB:%d\n", nr_pages);
+        }
+    }
+    // PUD exists, unmarked, so accept sizes over 2 MB
+    else {
+        if (nr_pages >= (1<<(21-12))) {
+            mark = true;
+            printk("MP: PMD unmarked, accepted size over 2 MB:%d\n", nr_pages);
+        }
+    }
+    if (mark) {
+        *pmd = pmd_mkformat(*pmd);
+        smp_wmb();
+        printk("PMD After mkformat: %lx\n", *pmd);
+    }
+}
+
 int fill_page_table_manually(struct mm_struct *mm , struct vm_area_struct *vma, unsigned long addr, unsigned int nr_pages)
 {
     int i;
@@ -4590,6 +4653,7 @@ int fill_page_table_manually(struct mm_struct *mm , struct vm_area_struct *vma, 
     struct page *temp = NULL;
     struct mem_cgroup *memcg;
 
+    printk("fill_page_table_manually: addr:%lx size=%u\n", addr, 4096*nr_pages);
     /*
     *  In this part we calculate offsets of page table elements for the given virtual address.
     *  ( The virtual address of the first page of the high-ordered block )
@@ -4605,9 +4669,11 @@ int fill_page_table_manually(struct mm_struct *mm , struct vm_area_struct *vma, 
     pgd = pgd_offset(mm, addr);
     if (pgd_none(*pgd) || pgd_bad(*pgd))
         printk(KERN_INFO "Bad pgd");
+    
     pud = pud_offset(pgd, addr);
     if (pud_none(*pud) || pud_bad(*pud))
         printk(KERN_INFO "Bad pud");
+
     pmd = pmd_offset(pud, addr);
     if (pmd_none(*pmd) || pmd_bad(*pmd))
     {
@@ -4616,7 +4682,8 @@ int fill_page_table_manually(struct mm_struct *mm , struct vm_area_struct *vma, 
         if ( pmd_bad(*pmd) )
             printk(KERN_INFO "Bad pmd");
     }
-
+    mark_pmd_if_appropriate(pmd, nr_pages);
+    printk("fill_page_table_manually (check): pmd=%lx\n", *pmd);
     ptep = pte_offset_map_lock(mm,pmd,addr,&ptl);
     pte = *ptep;
     /* Gets the page struct of the physical page */
@@ -4654,7 +4721,7 @@ int fill_page_table_manually(struct mm_struct *mm , struct vm_area_struct *vma, 
             if (pud_none(*pud) || pud_bad(*pud) )
                 printk(KERN_INFO "BAD PUD or PUD None");
         }
-
+        mark_pud_if_appropriate(pud, nr_pages);
         pmd = pmd_offset(pud, new_addr);
         if (pmd_none(*pmd) || pmd_bad(*pmd)) {
 
@@ -4667,6 +4734,7 @@ int fill_page_table_manually(struct mm_struct *mm , struct vm_area_struct *vma, 
             if ( pmd_bad(*pmd) )
                 printk(KERN_INFO "DDBad pmd");
         }
+        mark_pmd_if_appropriate(pmd, nr_pages);
 
         ptep = pte_offset_map_lock(mm,pmd,new_addr,&ptl);
 
@@ -4689,7 +4757,7 @@ int fill_page_table_manually(struct mm_struct *mm , struct vm_area_struct *vma, 
         temp = pte_page(pte);
 
         __SetPageUptodate(temp);
-	init_page_count(temp);	
+        init_page_count(temp);	
 
         if (mem_cgroup_try_charge(temp, mm, GFP_KERNEL, &memcg, false)) {
             put_page(temp);

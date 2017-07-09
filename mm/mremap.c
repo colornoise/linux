@@ -28,11 +28,21 @@
 
 #include "internal.h"
 
-static pmd_t *get_old_pmd(struct mm_struct *mm, unsigned long addr)
+static pgd_t *get_old_pgd(struct mm_struct *mm, unsigned long addr)
+{
+	pgd_t *pgd;
+
+	pgd = pgd_offset(mm, addr);
+	if (pgd_none_or_clear_bad(pgd))
+		return NULL;
+
+	return pgd;
+}
+
+static pud_t *get_old_pud(struct mm_struct *mm, unsigned long addr)
 {
 	pgd_t *pgd;
 	pud_t *pud;
-	pmd_t *pmd;
 
 	pgd = pgd_offset(mm, addr);
 	if (pgd_none_or_clear_bad(pgd))
@@ -42,6 +52,31 @@ static pmd_t *get_old_pmd(struct mm_struct *mm, unsigned long addr)
 	if (pud_none_or_clear_bad(pud))
 		return NULL;
 
+	return pud;
+}
+
+static pmd_t *get_old_pmd(struct mm_struct *mm, unsigned long addr,
+                            pgd_t *old_pgd, pud_t *old_pud)
+{
+	pgd_t *pgd;
+	pud_t *pud;
+	pmd_t *pmd;
+
+	pgd = pgd_offset(mm, addr);
+	if (pgd_none_or_clear_bad(pgd)) {
+        old_pgd = NULL;
+		return NULL;
+    }
+    else old_pgd = pgd;
+
+
+	pud = pud_offset(pgd, addr);
+	if (pud_none_or_clear_bad(pud)) {
+        old_pud = NULL;
+		return NULL;
+    }
+    else old_pud = pud;
+
 	pmd = pmd_offset(pud, addr);
 	if (pmd_none(*pmd))
 		return NULL;
@@ -50,16 +85,19 @@ static pmd_t *get_old_pmd(struct mm_struct *mm, unsigned long addr)
 }
 
 static pmd_t *alloc_new_pmd(struct mm_struct *mm, struct vm_area_struct *vma,
-			    unsigned long addr)
+			    unsigned long addr, bool mark_pgd, bool mark_pud)
 {
 	pgd_t *pgd;
 	pud_t *pud;
 	pmd_t *pmd;
 
 	pgd = pgd_offset(mm, addr);
+    if (mark_pgd) *pgd = pgd_mkformat(*pgd);
+        
 	pud = pud_alloc(mm, pgd, addr);
 	if (!pud)
 		return NULL;
+    if (mark_pud) *pud = pud_mkformat(*pud);
 
 	pmd = pmd_alloc(mm, pud, addr);
 	if (!pmd)
@@ -188,9 +226,14 @@ unsigned long move_page_tables(struct vm_area_struct *vma,
 {
 	unsigned long extent, next, old_end;
 	pmd_t *old_pmd, *new_pmd;
+    pgd_t *old_pgd;
+    pud_t *old_pud;
 	bool need_flush = false;
 	unsigned long mmun_start;	/* For mmu_notifiers */
 	unsigned long mmun_end;		/* For mmu_notifiers */
+    bool mark_pgd = false;
+    bool mark_pud = false;
+    bool mark_pmd = false;
 
 	old_end = old_addr + len;
 	flush_cache_range(vma, old_addr, old_end);
@@ -206,10 +249,25 @@ unsigned long move_page_tables(struct vm_area_struct *vma,
 		extent = next - old_addr;
 		if (extent > old_end - old_addr)
 			extent = old_end - old_addr;
-		old_pmd = get_old_pmd(vma->vm_mm, old_addr);
+		old_pmd = get_old_pmd(vma->vm_mm, old_addr, old_pgd, old_pud);
 		if (!old_pmd)
 			continue;
-		new_pmd = alloc_new_pmd(vma->vm_mm, vma, new_addr);
+        /* if old_pmd exists, so should old pgd, pud */
+        old_pgd = get_old_pgd(vma->vm_mm, old_addr);
+        old_pud = get_old_pud(vma->vm_mm, old_addr);
+        /*
+        if (pgd_marked(*old_pgd)) {
+            mark_pgd = true;
+        }
+        if (pud_marked(*old_pud)) {
+            mark_pud = true;
+        }
+        */
+        if (pmd_marked(*old_pmd)) {
+            mark_pmd = true;
+        }
+
+		new_pmd = alloc_new_pmd(vma->vm_mm, vma, new_addr, mark_pgd, mark_pud);
 		if (!new_pmd)
 			break;
 		if (pmd_trans_huge(*old_pmd)) {
@@ -232,6 +290,7 @@ unsigned long move_page_tables(struct vm_area_struct *vma,
 		}
 		if (pte_alloc(new_vma->vm_mm, new_pmd, new_addr))
 			break;
+        if (mark_pmd) *new_pmd = pmd_mkformat(*new_pmd);
 		next = (new_addr + PMD_SIZE) & PMD_MASK;
 		if (extent > next - new_addr)
 			extent = next - new_addr;
@@ -239,6 +298,7 @@ unsigned long move_page_tables(struct vm_area_struct *vma,
 			extent = LATENCY_LIMIT;
 		move_ptes(vma, old_pmd, old_addr, old_addr + extent, new_vma,
 			  new_pmd, new_addr, need_rmap_locks, &need_flush);
+
 	}
 	if (need_flush)
 		flush_tlb_range(vma, old_end-len, old_addr);
