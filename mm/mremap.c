@@ -28,54 +28,53 @@
 
 #include "internal.h"
 
-static pgd_t *get_old_pgd(struct mm_struct *mm, unsigned long addr)
+static bool old_pgd_marked(struct mm_struct *mm, unsigned long addr)
 {
 	pgd_t *pgd;
 
 	pgd = pgd_offset(mm, addr);
 	if (pgd_none_or_clear_bad(pgd))
-		return NULL;
+        return false;
 
-	return pgd;
+    if (pgd_marked(*pgd))
+    	return true;
+
+	return false;
 }
 
-static pud_t *get_old_pud(struct mm_struct *mm, unsigned long addr)
+static bool old_pud_marked(struct mm_struct *mm, unsigned long addr)
 {
 	pgd_t *pgd;
 	pud_t *pud;
 
 	pgd = pgd_offset(mm, addr);
 	if (pgd_none_or_clear_bad(pgd))
-		return NULL;
+		return false;
 
 	pud = pud_offset(pgd, addr);
 	if (pud_none_or_clear_bad(pud))
-		return NULL;
+		return false;
 
-	return pud;
+    if (pud_marked(*pud))
+    	return true;
+
+    return false;
 }
 
-static pmd_t *get_old_pmd(struct mm_struct *mm, unsigned long addr,
-                            pgd_t *old_pgd, pud_t *old_pud)
+static pmd_t *get_old_pmd(struct mm_struct *mm, unsigned long addr)
 {
 	pgd_t *pgd;
 	pud_t *pud;
 	pmd_t *pmd;
 
 	pgd = pgd_offset(mm, addr);
-	if (pgd_none_or_clear_bad(pgd)) {
-        old_pgd = NULL;
+	if (pgd_none_or_clear_bad(pgd)) 
 		return NULL;
-    }
-    else old_pgd = pgd;
 
 
 	pud = pud_offset(pgd, addr);
-	if (pud_none_or_clear_bad(pud)) {
-        old_pud = NULL;
+	if (pud_none_or_clear_bad(pud))
 		return NULL;
-    }
-    else old_pud = pud;
 
 	pmd = pmd_offset(pud, addr);
 	if (pmd_none(*pmd))
@@ -92,14 +91,14 @@ static pmd_t *alloc_new_pmd(struct mm_struct *mm, struct vm_area_struct *vma,
 	pmd_t *pmd;
 
 	pgd = pgd_offset(mm, addr);
-    if (mark_pgd) *pgd = pgd_mkformat(*pgd);
         
 	pud = pud_alloc(mm, pgd, addr);
+    if (mark_pgd) *pgd = pgd_mkformat(*pgd);
 	if (!pud)
 		return NULL;
-    if (mark_pud) *pud = pud_mkformat(*pud);
 
 	pmd = pmd_alloc(mm, pud, addr);
+    if (mark_pud) *pud = pud_mkformat(*pud);
 	if (!pmd)
 		return NULL;
 
@@ -222,12 +221,10 @@ static void move_ptes(struct vm_area_struct *vma, pmd_t *old_pmd,
 unsigned long move_page_tables(struct vm_area_struct *vma,
 		unsigned long old_addr, struct vm_area_struct *new_vma,
 		unsigned long new_addr, unsigned long len,
-		bool need_rmap_locks)
+		bool need_rmap_locks, bool need_format)
 {
 	unsigned long extent, next, old_end;
 	pmd_t *old_pmd, *new_pmd;
-    pgd_t *old_pgd;
-    pud_t *old_pud;
 	bool need_flush = false;
 	unsigned long mmun_start;	/* For mmu_notifiers */
 	unsigned long mmun_end;		/* For mmu_notifiers */
@@ -249,20 +246,15 @@ unsigned long move_page_tables(struct vm_area_struct *vma,
 		extent = next - old_addr;
 		if (extent > old_end - old_addr)
 			extent = old_end - old_addr;
-		old_pmd = get_old_pmd(vma->vm_mm, old_addr, old_pgd, old_pud);
+		old_pmd = get_old_pmd(vma->vm_mm, old_addr);
 		if (!old_pmd)
 			continue;
         /* if old_pmd exists, so should old pgd, pud */
-        old_pgd = get_old_pgd(vma->vm_mm, old_addr);
-        old_pud = get_old_pud(vma->vm_mm, old_addr);
-        /*
-        if (pgd_marked(*old_pgd)) {
-            mark_pgd = true;
+        if (need_format) {
+            mark_pgd = old_pgd_marked(vma->vm_mm, old_addr);
+            mark_pud = old_pud_marked(vma->vm_mm, old_addr);
+
         }
-        if (pud_marked(*old_pud)) {
-            mark_pud = true;
-        }
-        */
         if (pmd_marked(*old_pmd)) {
             mark_pmd = true;
         }
@@ -349,7 +341,7 @@ unsigned long move_vma(struct vm_area_struct *vma,
 		return -ENOMEM;
 
 	moved_len = move_page_tables(vma, old_addr, new_vma, new_addr, old_len,
-				     need_rmap_locks);
+				     need_rmap_locks, true);
 	if (moved_len < old_len) {
 		err = -ENOMEM;
 	} else if (vma->vm_ops && vma->vm_ops->mremap) {
@@ -363,7 +355,7 @@ unsigned long move_vma(struct vm_area_struct *vma,
 		 * and then proceed to unmap new area instead of old.
 		 */
 		move_page_tables(new_vma, new_addr, vma, old_addr, moved_len,
-				 true);
+				 true, true);
 		vma = new_vma;
 		old_len = new_len;
 		old_addr = new_addr;

@@ -625,7 +625,7 @@ static int shift_arg_pages(struct vm_area_struct *vma, unsigned long shift)
 	 * process cleanup to remove whatever mess we made.
 	 */
 	if (length != move_page_tables(vma, old_start,
-				       vma, new_start, length, false))
+				       vma, new_start, length, false, false))
 		return -ENOMEM;
 
 	lru_add_drain();
@@ -819,7 +819,7 @@ int setup_arg_pages(struct linux_binprm *bprm,
 		printk("Trying to move stack\n");
 		printk("dest_start:%lx copy_size:%lx\n", dest_start, copy_size);
 		if (copy_size != move_page_tables(vma, old_start, new_vma,
-						dest_start, copy_size, false))
+						dest_start, copy_size, false, false))
 			return -ENOMEM;
 
 		lru_add_drain();

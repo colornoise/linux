@@ -4669,7 +4669,6 @@ int fill_page_table_manually(struct mm_struct *mm , struct vm_area_struct *vma, 
     pgd = pgd_offset(mm, addr);
     if (pgd_none(*pgd) || pgd_bad(*pgd))
         printk(KERN_INFO "Bad pgd");
-    
     pud = pud_offset(pgd, addr);
     if (pud_none(*pud) || pud_bad(*pud))
         printk(KERN_INFO "Bad pud");
@@ -4712,7 +4711,6 @@ int fill_page_table_manually(struct mm_struct *mm , struct vm_area_struct *vma, 
 
             printk(KERN_INFO "BAD PGD");
         }
-
         pud = pud_offset(pgd, new_addr);
         if (pud_none(*pud) || pud_bad(*pud)) {
             if ( __pmd_alloc(mm, pud, new_addr) )
