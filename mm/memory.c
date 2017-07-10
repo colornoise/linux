@@ -4587,20 +4587,20 @@ void mark_pud_if_appropriate(pud_t *pud, unsigned int nr_pages)
     if (pud_none(*pud) || pud_bad(*pud)) {
         if (nr_pages >= (1 << (25-12))) {
             mark = true;
-            printk("MP: No pud, accepted size over 64 KB:%d\n", nr_pages);
+            printk("No pud, accepted size over 32 MB:%dlu\n", (long)nr_pages*4096);
         }
     }
     // PUD exists, already marked previously, so accept sizes over 64KB
     else if(pud_marked(*pud)) {
         if (nr_pages >= (1 << (25-12))) {
-//            printk("MP: pud marked, accepted size over 64 KB:%d\n", nr_pages);
+//            printk("MP: pud marked, accepted size over 2 MB:%d\n", nr_pages*4096);
         }
     }
     // PUD exists, unmarked, so accept sizes over 2 MB
     else {
         if (nr_pages >= (1 << (30-12))) {
             mark = true;
-            printk("MP: pud unmarked, accepted size over 2 MB:%d\n", nr_pages);
+            printk("MP: pud unmarked, accepted size over 1 GB:%lu\n", (long)nr_pages*4096);
         }
     }
     if (mark) {
@@ -4616,7 +4616,7 @@ void mark_pmd_if_appropriate(pmd_t *pmd, unsigned int nr_pages)
     if (pmd_none(*pmd) || pmd_bad(*pmd)) {
         if (nr_pages >= (1 << (16-12))) {
             mark = true;
-            printk("MP: No PMD, accepted size over 64 KB:%d\n", nr_pages);
+            printk("MP: No PMD, accepted size over 64 KB:%lu\n", (long)nr_pages*4096);
         }
     }
     // PUD exists, already marked previously, so accept sizes over 64KB
@@ -4629,7 +4629,7 @@ void mark_pmd_if_appropriate(pmd_t *pmd, unsigned int nr_pages)
     else {
         if (nr_pages >= (1<<(21-12))) {
             mark = true;
-            printk("MP: PMD unmarked, accepted size over 2 MB:%d\n", nr_pages);
+            printk("MP: PMD unmarked, accepted size over 2 MB:%lu\n", (long)nr_pages*4096);
         }
     }
     if (mark) {
@@ -4672,6 +4672,8 @@ int fill_page_table_manually(struct mm_struct *mm , struct vm_area_struct *vma, 
     pud = pud_offset(pgd, addr);
     if (pud_none(*pud) || pud_bad(*pud))
         printk(KERN_INFO "Bad pud");
+    
+    mark_pud_if_appropriate(pud, nr_pages);
 
     pmd = pmd_offset(pud, addr);
     if (pmd_none(*pmd) || pmd_bad(*pmd))
