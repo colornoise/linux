@@ -315,6 +315,10 @@ unsigned long vm_mmap_pgoff(struct file *file, unsigned long addr,
 unsigned long get_pa(unsigned long addr) {
 	unsigned long pa = 0;
 	struct vm_area_struct *vma = find_vma(current->mm, addr);
+    if (!vma) {
+		printk("Unable to retrieve vma for addr:%lx\n", addr);
+		return 0;
+    }
 	if(follow_pfn(vma, addr, &pa) < 0) { 
 		printk("Unable to retrieve pfn for addr:%lx\n", addr);
 		return 0;
