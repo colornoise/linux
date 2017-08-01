@@ -726,6 +726,10 @@ int setup_arg_pages(struct linux_binprm *bprm,
 		}
 		else if(get_pa(new_vma->vm_start)!=0 && mm->identity_mapping_en >= 1){
 			unsigned long temp_base = move_vma(new_vma, new_vma->vm_start, PAGE_ALIGN(new_size), PAGE_ALIGN(new_size), phys_addr, &locked);
+            if (offset_in_page(temp_base)) {
+                printk("Error in moving stack\n");
+                BUG();
+            } 
 			stack_top = temp_base + new_size - 4096; //Leaving space at the end
 			printk("AFTER stack_base:%lx stack_top:%lx\n", temp_base, stack_top);
 			new_vma = find_vma(mm, temp_base);

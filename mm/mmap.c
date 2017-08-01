@@ -1345,8 +1345,9 @@ unsigned long do_mmap(struct file *file, unsigned long addr,
 		return -EOVERFLOW;
 
 	/* Too many mappings? */
-	if (mm->map_count > sysctl_max_map_count)
-		return -ENOMEM;
+	if (mm->map_count > sysctl_max_map_count) {
+	//	return -ENOMEM;
+    }
 
 	/* Obtain the address to map to. we verify (or select) it and ensure
 	 * that it represents a valid section of the address space.
@@ -1652,6 +1653,13 @@ SYSCALL_DEFINE6(mmap_pgoff, unsigned long, addr, unsigned long, len,
 		}
 		else if(get_pa(vma->vm_start)!=0 && current->mm->identity_mapping_en >= 1){
 			retval = move_vma(vma, vma->vm_start, PAGE_ALIGN(len), PAGE_ALIGN(len), phys_addr, &locked);
+            if(offset_in_page(retval)) {
+                printk("AFTER MMAP remap, got screwed with error:%lu\n",0-retval);
+                if (retval == 0-ENOMEM) {
+                    BUG();
+                }
+                goto retry;
+            }
 			vma = find_vma(mm, retval);
 			printk("AFTER MMAP remap old->vm_start VA:%lx PA:%lx\n", vma->vm_start, get_pa(vma->vm_start));
 			printk("AFTER MMAP remap old->vm_end VA:%lx PA:%lx\n", vma->vm_end-4096, get_pa(vma->vm_end-4096));
@@ -1661,6 +1669,10 @@ SYSCALL_DEFINE6(mmap_pgoff, unsigned long, addr, unsigned long, len,
 			}
 */
 		}
+        if (get_pa(retval) != retval)  {
+            BUG();
+            return (0-ENOMEM);
+        }   
 	}
 
 out_fput:

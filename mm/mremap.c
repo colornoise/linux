@@ -329,8 +329,8 @@ unsigned long move_vma(struct vm_area_struct *vma,
 	 * We'd prefer to avoid failure later on in do_munmap:
 	 * which may split one vma into three before unmapping.
 	 */
-	if (mm->map_count >= sysctl_max_map_count - 3)
-		return -ENOMEM;
+//	if (mm->map_count >= sysctl_max_map_count - 3)
+//		return -ENOMEM;
 
 	/*
 	 * Advise KSM to break any KSM pages in the area to be moved:
@@ -345,11 +345,12 @@ unsigned long move_vma(struct vm_area_struct *vma,
 		return err;
 
 	new_pgoff = vma->vm_pgoff + ((old_addr - vma->vm_start) >> PAGE_SHIFT);
+    printk("COPYING vma\n");
 	new_vma = copy_vma(&vma, new_addr, new_len, new_pgoff,
 			   &need_rmap_locks);
 	if (!new_vma)
 		return -ENOMEM;
-
+    printk("Moving Page tables\n");
 	moved_len = move_page_tables(vma, old_addr, new_vma, new_addr, old_len,
 				     need_rmap_locks, true);
 	if (moved_len < old_len) {

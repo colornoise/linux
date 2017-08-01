@@ -392,6 +392,10 @@ static unsigned long elf_map(struct file *filep, unsigned long addr,
 						remapped = true;
 						map_addr = move_vma(vma, vma->vm_start, PAGE_ALIGN(total_size), 
 								PAGE_ALIGN(total_size), phys_addr, &locked);
+                        if(offset_in_page(map_addr)) {
+                            printk("move_vma error in code\n");
+                            BUG();
+                        }
 						vma = find_vma(mm, map_addr);
 						printk("AFTER CODE remap vm_start VA:%lx PA:%lx\n", 
 							vma->vm_start, get_pa(vma->vm_start));
