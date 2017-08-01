@@ -413,6 +413,8 @@ struct mm_struct {
 	atomic_long_t nr_ptes;			/* PTE page table pages */
 #if CONFIG_PGTABLE_LEVELS > 2
 	atomic_long_t nr_pmds;			/* PMD page table pages */
+	atomic_long_t nr_puds;			/* PUD page table pages */
+	atomic_long_t nr_pgds;			/* PGD page table pages */
 #endif
 	int map_count;				/* number of VMAs */
 

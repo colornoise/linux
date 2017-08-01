@@ -481,6 +481,7 @@ static inline void free_pud_range(struct mmu_gather *tlb, pgd_t *pgd,
 	pud = pud_offset(pgd, start);
 	pgd_clear(pgd);
 	pud_free_tlb(tlb, pud, start);
+	mm_dec_nr_puds(tlb->mm);
 }
 
 /*
@@ -607,7 +608,7 @@ int __pte_alloc(struct mm_struct *mm, pmd_t *pmd, unsigned long address)
 
 	ptl = pmd_lock(mm, pmd);
 	if (likely(pmd_none(*pmd))) {	/* Has another populated it ? */
-		atomic_long_inc(&mm->nr_ptes);
+        atomic_long_inc(&mm->nr_ptes);
 		pmd_populate(mm, pmd, new);
 		new = NULL;
 	}
@@ -3941,8 +3942,10 @@ int __pud_alloc(struct mm_struct *mm, pgd_t *pgd, unsigned long address)
 	spin_lock(&mm->page_table_lock);
 	if (pgd_present(*pgd))		/* Another has populated it */
 		pud_free(mm, new);
-	else
+	else {
+		mm_inc_nr_puds(mm);
 		pgd_populate(mm, pgd, new);
+    }
 	spin_unlock(&mm->page_table_lock);
 	return 0;
 }
@@ -3997,6 +4000,8 @@ static int __follow_pte_pmd(struct mm_struct *mm, unsigned long address,
 		goto out;
 
 	pmd = pmd_offset(pud, address);
+	if (pmd_none(*pmd) || unlikely(pmd_bad(*pmd)))
+		goto out;
 	VM_BUG_ON(pmd_trans_huge(*pmd));
 
 	if (pmd_huge(*pmd)) {
@@ -4634,6 +4639,7 @@ void mark_pmd_if_appropriate(pmd_t *pmd, unsigned int nr_pages)
     }
     if (mark) {
         *pmd = pmd_mkformat(*pmd);
+        atomic_long_dec((&current->mm->nr_ptes));
         smp_wmb();
         printk("PMD After mkformat: %lx\n", *pmd);
     }
@@ -4678,6 +4684,8 @@ int fill_page_table_manually(struct mm_struct *mm , struct vm_area_struct *vma, 
     pmd = pmd_offset(pud, addr);
     if (pmd_none(*pmd) || pmd_bad(*pmd))
     {
+        //x86-64 never unmaps entries, so we have to ensure that this isn;t
+        // counted now, will be counted when it is remapped for VA=PA 
         if ( __pte_alloc(mm,pmd,addr) )
             printk(KERN_INFO "Pte couldn't be allocated");
         if ( pmd_bad(*pmd) )
@@ -4725,6 +4733,8 @@ int fill_page_table_manually(struct mm_struct *mm , struct vm_area_struct *vma, 
         pmd = pmd_offset(pud, new_addr);
         if (pmd_none(*pmd) || pmd_bad(*pmd)) {
 
+            //x86-64 never unmaps entries, so we have to ensure that this isn;t
+            // counted now, will be counted when it is remapped for VA=PA 
             if ( __pte_alloc(mm,pmd,new_addr) )
                 printk(KERN_INFO "Pte couldn't be allocated");
 

@@ -1636,8 +1636,10 @@ SYSCALL_DEFINE6(mmap_pgoff, unsigned long, addr, unsigned long, len,
 		phys_addr = get_pa(retval);
 		phys_vma = find_vma(mm, phys_addr);
 		
-		printk("BEFORE MMAP remap vm_start VA:%lx PA:%lx\n", vma->vm_start, get_pa(vma->vm_start));
-		printk("BEFORE MMAP remap vm_end VA:%lx PA:%lx\n", vma->vm_end-4096, get_pa(vma->vm_end-4096));
+		printk("BEFORE MMAP remap len:%lx vm_start VA:%lx PA:%lx\n", len, 
+                vma->vm_start, get_pa(vma->vm_start));
+		printk("BEFORE MMAP remap vm_end VA:%lx PA:%lx\n", vma->vm_end-4096,
+                get_pa(vma->vm_end-4096));
 		
 		if(phys_addr > TASK_SIZE - len)
 			printk("MMAP remap: Error 1: No space\n");

@@ -180,11 +180,20 @@ static void move_ptes(struct vm_area_struct *vma, pmd_t *old_pmd,
 	if (new_ptl != old_ptl)
 		spin_lock_nested(new_ptl, SINGLE_DEPTH_NESTING);
 	arch_enter_lazy_mmu_mode();
-
+    bool once=true;    
 	for (; old_addr < old_end; old_pte++, old_addr += PAGE_SIZE,
 				   new_pte++, new_addr += PAGE_SIZE) {
 		if (pte_none(*old_pte))
 			continue;
+        
+        // Making sure there is at least one valid pte 
+        if(once) {
+            once = false;
+            if(pmd_marked(*new_pmd) && mm->identity_mapping_en) {
+//                atomic_long_dec(&mm->nr_ptes);
+                printk("Number of PTEs:%8lu\n", mm->nr_ptes);
+            }
+        }        
 
 		pte = ptep_get_and_clear(mm, old_addr, old_pte);
 		/*
@@ -200,7 +209,8 @@ static void move_ptes(struct vm_area_struct *vma, pmd_t *old_pmd,
 			force_flush = true;
 		pte = move_pte(pte, new_vma->vm_page_prot, old_addr, new_addr);
 		pte = move_soft_dirty_pte(pte);
-		set_pte_at(mm, new_addr, new_pte, pte);
+        set_pte_at(mm, new_addr, new_pte, pte);
+
 	}
 
 	arch_leave_lazy_mmu_mode();

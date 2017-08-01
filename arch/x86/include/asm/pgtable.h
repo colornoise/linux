@@ -341,7 +341,7 @@ static inline pmd_t pmd_mknotpresent(pmd_t pmd)
 }
 
 static inline pmd_t pmd_mkformat(pmd_t pmd)
-{
+{   
 	return pmd_set_flags(pmd, _PAGE_SOFTW2);
 }
 
