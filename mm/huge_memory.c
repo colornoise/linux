@@ -35,6 +35,9 @@
 #include <asm/pgalloc.h>
 #include "internal.h"
 
+extern inline pmd_t pmd_mkreserve(pmd_t pmd);
+extern inline pte_t pte_mkreserve(pte_t pte);
+
 /*
  * By default transparent hugepage support is disabled in order that avoid
  * to risk increase the memory footprint of applications without a guaranteed
@@ -546,6 +549,7 @@ static int __do_huge_pmd_anonymous_page(struct vm_fault *vmf, struct page *page,
 		gfp_t gfp)
 {
 	struct vm_area_struct *vma = vmf->vma;
+	struct mm_struct *mm = vma->vm_mm;
 	struct mem_cgroup *memcg;
 	pgtable_t pgtable;
 	unsigned long haddr = vmf->address & HPAGE_PMD_MASK;
@@ -601,6 +605,12 @@ static int __do_huge_pmd_anonymous_page(struct vm_fault *vmf, struct page *page,
 		mem_cgroup_commit_charge(page, memcg, false, true);
 		lru_cache_add_active_or_unevictable(page, vma);
 		pgtable_trans_huge_deposit(vma->vm_mm, vmf->pmd, pgtable);
+		/* Make the page table entry as reserved for TLB miss tracking */
+		if(mm && (mm->badger_trap_en==1) && (!(vmf->flags & FAULT_FLAG_INSTRUCTION)))
+		{
+			entry = pmd_mkreserve(entry);
+		}
+
 		set_pmd_at(vma->vm_mm, haddr, vmf->pmd, entry);
 		add_mm_counter(vma->vm_mm, MM_ANONPAGES, HPAGE_PMD_NR);
 		atomic_long_inc(&vma->vm_mm->nr_ptes);
@@ -646,6 +656,15 @@ static bool set_huge_zero_page(pgtable_t pgtable, struct mm_struct *mm,
 	entry = pmd_mkhuge(entry);
 	if (pgtable)
 		pgtable_trans_huge_deposit(mm, pmd, pgtable);
+	/* Make the page table entry as reserved for TLB miss tracking 
+	 * No need to worry for zero page with instruction faults.
+	 * Instruction faults will never reach here.
+	 */
+	if(mm && (mm->badger_trap_en==1))
+	{
+		entry = pmd_mkreserve(entry);
+	}		
+
 	set_pmd_at(mm, haddr, pmd, entry);
 	atomic_long_inc(&mm->nr_ptes);
 	return true;
@@ -910,6 +929,7 @@ static int do_huge_pmd_wp_page_fallback(struct vm_fault *vmf, pmd_t orig_pmd,
 		struct page *page)
 {
 	struct vm_area_struct *vma = vmf->vma;
+	struct mm_struct *mm = vma->vm_mm;
 	unsigned long haddr = vmf->address & HPAGE_PMD_MASK;
 	struct mem_cgroup *memcg;
 	pgtable_t pgtable;
@@ -981,6 +1001,13 @@ static int do_huge_pmd_wp_page_fallback(struct vm_fault *vmf, pmd_t orig_pmd,
 		lru_cache_add_active_or_unevictable(pages[i], vma);
 		vmf->pte = pte_offset_map(&_pmd, haddr);
 		VM_BUG_ON(!pte_none(*vmf->pte));
+
+		/* Make the page table entry as reserved for TLB miss tracking */
+		if(mm && (mm->badger_trap_en==1) && (!(vmf->flags & FAULT_FLAG_INSTRUCTION)))
+		{
+			entry = pte_mkreserve(entry);
+		}
+
 		set_pte_at(vma->vm_mm, haddr, vmf->pte, entry);
 		pte_unmap(vmf->pte);
 	}
@@ -1015,6 +1042,7 @@ out_free_pages:
 int do_huge_pmd_wp_page(struct vm_fault *vmf, pmd_t orig_pmd)
 {
 	struct vm_area_struct *vma = vmf->vma;
+	struct mm_struct *mm = vma->vm_mm;
 	struct page *page = NULL, *new_page;
 	struct mem_cgroup *memcg;
 	unsigned long haddr = vmf->address & HPAGE_PMD_MASK;
@@ -1111,6 +1139,13 @@ alloc:
 		entry = maybe_pmd_mkwrite(pmd_mkdirty(entry), vma);
 		pmdp_huge_clear_flush_notify(vma, haddr, vmf->pmd);
 		page_add_new_anon_rmap(new_page, vma, haddr, true);
+
+		/* Make the page table entry as reserved for TLB miss tracking */
+		if(mm && (mm->badger_trap_en==1) && (!(vmf->flags & FAULT_FLAG_INSTRUCTION)))
+		{
+			entry = pmd_mkreserve(entry);
+		}
+
 		mem_cgroup_commit_charge(new_page, memcg, false, true);
 		lru_cache_add_active_or_unevictable(new_page, vma);
 		set_pmd_at(vma->vm_mm, haddr, vmf->pmd, entry);

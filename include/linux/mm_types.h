@@ -512,6 +512,12 @@ struct mm_struct {
 	bool tlb_flush_pending;
 #endif
 	struct uprobes_state uprobes_state;
+//  Variables for Badger Trap
+ 
+	unsigned int badger_trap_en;
+	unsigned long total_dtlb_misses;
+	unsigned long total_dtlb_4k_misses;
+	unsigned long total_dtlb_hugetlb_misses;
 #ifdef CONFIG_HUGETLB_PAGE
 	atomic_long_t hugetlb_usage;
 #endif

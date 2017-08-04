@@ -68,6 +68,8 @@
 #include <trace/events/sched.h>
 #include <linux/mman.h>
 
+extern int is_badger_trap_process(const char* proc_name);
+extern void badger_trap_init(struct mm_struct *mm);
 extern int is_process_of_identity_mapping_testing(const char* proc_name);
 extern int is_process_of_identity_mapping_stable(const char* proc_name);
 extern int is_process_of_apriori_paging(const char* proc_name);
@@ -1451,6 +1453,21 @@ void setup_new_exec(struct linux_binprm * bprm)
 	__set_task_comm(current, kbasename(bprm->filename), true);
 
 	/* SWAPNIL: Check if we need to enable apriori paging for this process*/
+	/* Check if we need to enable badger trap for this process*/
+        current->mm->badger_trap_en = 0;
+	if(is_badger_trap_process(current->comm))
+	{
+		current->mm->badger_trap_en = 1;
+		badger_trap_init(current->mm);
+	}
+
+	if(current && current->real_parent && current->real_parent != current && current->real_parent->mm && current->real_parent->mm->badger_trap_en)
+	{
+		current->mm->badger_trap_en = 1;
+		badger_trap_init(current->mm);
+	}
+ 
+
         current->mm->apriori_paging_en = 0;
         if(is_process_of_apriori_paging(current->comm))
         {

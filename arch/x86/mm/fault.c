@@ -1170,7 +1170,13 @@ access_error(unsigned long error_code, struct vm_area_struct *vma)
 
 	/* read, present: */
 	if (unlikely(error_code & PF_PROT))
-		return 1;
+       {
+               if((error_code & PF_RSVD) && current->mm->badger_trap_en==1)
+                       return 0;
+               else
+                       return 1;
+       }
+
 
 	/* read, not present: */
 	if (unlikely(!(vma->vm_flags & (VM_READ | VM_EXEC | VM_WRITE))))
@@ -1276,7 +1282,7 @@ __do_page_fault(struct pt_regs *regs, unsigned long error_code,
 	if (unlikely(kprobes_fault(regs)))
 		return;
 
-	if (unlikely(error_code & PF_RSVD))
+	if (unlikely((error_code & PF_RSVD)  && (current->mm->badger_trap_en==0)))
 		pgtable_bad(regs, error_code, address);
 
 	if (unlikely(smap_violation(error_code, regs))) {
