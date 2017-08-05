@@ -3204,9 +3204,10 @@ static int do_fake_page_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 	touch_page_addr = (void *)(address & PAGE_MASK);
 	ret = copy_from_user(&touched, (__force const void __user *)touch_page_addr, sizeof(unsigned long));
 
-	if(ret)
+	if(ret) {
+		pte_unmap_unlock(page_table, ptl);
 		return VM_FAULT_SIGBUS;
-
+	}
 	/* Here where we do all our analysis */
 	current->total_dtlb_4k_misses++;
 	current->total_dtlb_misses++;
@@ -3667,12 +3668,14 @@ static int handle_pte_fault(struct vm_fault *vmf, unsigned long apriori_flag,
 	struct mm_struct *mm = vmf->vma->vm_mm;
 	if(mm && mm->badger_trap_en && (vmf->flags & FAULT_FLAG_INSTRUCTION))
 	{
-		vmf->pte = pte_offset_map_lock(mm, vmf->pmd, vmf->address, &vmf->ptl);
+		vmf->pte = pte_offset_map(vmf->pmd, vmf->address);
 		if(vmf->pte) {
+			vmf->ptl = pte_lockptr(mm, vmf->pmd);
+			spin_lock(vmf->ptl);
 	                if(is_pte_reserved(*vmf->pte))
         	                *vmf->pte = pte_unreserve(*vmf->pte);	
+			pte_unmap_unlock(vmf->pte, vmf->ptl);
 		}
-		pte_unmap_unlock(vmf->pte, vmf->ptl);
 	}
 
 	/* We need to figure out if the page fault is a fake page fault or not.
@@ -3689,33 +3692,28 @@ static int handle_pte_fault(struct vm_fault *vmf, unsigned long apriori_flag,
  	 */
 	if(mm && mm->badger_trap_en && (!(vmf->flags & FAULT_FLAG_INSTRUCTION)))
 	{
-		vmf->pte = pte_offset_map_lock(mm, vmf->pmd, vmf->address, &vmf->ptl);
+		vmf->pte = pte_offset_map(vmf->pmd, vmf->address);
 		if(vmf->pte && pte_present(*vmf->pte)) {
+			vmf->ptl = pte_lockptr(mm, vmf->pmd);
+// TODO FIXME			spin_lock(vmf->ptl);
 			entry = *vmf->pte;
-			if (mm && mm->badger_trap_en)
-				printk("HERE 4\n");
 			if((vmf->flags & FAULT_FLAG_WRITE) && is_pte_reserved(entry) && !pte_write(entry))
 			{
-				pte_unmap_unlock(vmf->pte, vmf->ptl);
+//				pte_unmap_unlock(vmf->pte, vmf->ptl);
 //				vmf->ptl = pte_lockptr(mm,vmf->pmd);
 //				spin_lock(vmf->ptl);
-				entry = *vmf->pte;
 				vmf->orig_pte = *vmf->pte;
-				if (mm && mm->badger_trap_en)
-					printk("HERE 5\n");
 				return do_wp_page(vmf);
 			}
 			else if(is_pte_reserved(entry))
 			{
-				if (mm && mm->badger_trap_en)
-					printk("HERE 6\n");
 				return do_fake_page_fault(mm, vmf->vma, vmf->address,
 						vmf->pte, vmf->pmd, vmf->flags, vmf->ptl);
 			}
 
 			*vmf->pte = pte_mkreserve(*vmf->pte);
+			pte_unmap_unlock(vmf->pte, vmf->ptl);
 		}
-		pte_unmap_unlock(vmf->pte, vmf->ptl);
 	}
 
 	if(apriori_flag == 1)
@@ -3757,8 +3755,6 @@ static int handle_pte_fault(struct vm_fault *vmf, unsigned long apriori_flag,
 		}
 	}
 
-    if (mm && mm->badger_trap_en)
-	    printk("HERE 6\n");
 	if (!vmf->pte) {
 		if (vma_is_anonymous(vmf->vma))
 			return do_anonymous_page(vmf, apriori_flag, apriori_order, mark_pmd);
@@ -3786,8 +3782,6 @@ static int handle_pte_fault(struct vm_fault *vmf, unsigned long apriori_flag,
     if (pte_protnone(vmf->orig_pte) && vma_is_accessible(vmf->vma))
         return do_numa_page(vmf);
 
-    if (mm && mm->badger_trap_en)
-	    printk("HERE 7\n");
     vmf->ptl = pte_lockptr(vmf->vma->vm_mm, vmf->pmd);
     spin_lock(vmf->ptl);
     entry = vmf->orig_pte;
@@ -3893,8 +3887,6 @@ static int __handle_mm_fault(struct vm_area_struct *vma, unsigned long address,
 //            mark_pmd = true;
         }   
     }
-    if (mm && mm->badger_trap_en)
-	    printk("HERE 1\n");
 	pgd = pgd_offset(mm, address);
 /*    if (apriori_flag == 1) {
         if (current->mm->identity_mapping_en >= 2) {
@@ -3973,8 +3965,6 @@ static int __handle_mm_fault(struct vm_area_struct *vma, unsigned long address,
         printk("After mkformat: %lx\n", *pud);
 	} 
 */
-    if (mm && mm->badger_trap_en)
-	    printk("HERE 2\n");
     if (!vmf.pmd)
         return VM_FAULT_OOM;
 
@@ -4043,8 +4033,6 @@ static int __handle_mm_fault(struct vm_area_struct *vma, unsigned long address,
 			}
 		}
 	}
-	if (mm && mm->badger_trap_en)
-		printk("HERE 3\n");
 
 	return handle_pte_fault(&vmf, apriori_flag, apriori_order, mark_pmd);
 }
