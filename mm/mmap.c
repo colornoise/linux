@@ -38,6 +38,7 @@
 #include <linux/khugepaged.h>
 #include <linux/uprobes.h>
 #include <linux/rbtree_augmented.h>
+#include <linux/vmlist.h>
 #include <linux/notifier.h>
 #include <linux/memory.h>
 #include <linux/printk.h>
@@ -455,6 +456,36 @@ static __always_inline void vma_rb_erase(struct vm_area_struct *vma,
 	__vma_rb_erase(vma, root);
 }
 
+__always_inline void vmlist_insert(struct vm_area_struct *vma,
+                        struct vmlist_root *root)
+{
+    struct vmlist_node new_node = {vma, NULL, NULL};
+    if (VMLIST_EMPTY_ROOT(root)) {
+        // Linked List is empty
+        printk("Added vma (start:%lx) at empty root\n", vma->vm_start);
+        root->vmlist_node = &new_node;
+    } else {
+        // Common case will be we are just adding at the end
+        if (root->vmlist_node->vma->vm_start < vma->vm_start) {
+            printk("Added vma (start:%lx) at root\n", vma->vm_start);
+            new_node.next = root->vmlist_node;
+            root->vmlist_node = &new_node;
+        } else {
+            struct vmlist_node *curr_node = root->vmlist_node->next;
+            while(true) {
+                if (curr_node->vma->vm_start < vma->vm_start) {
+                    printk("Adding vma (start:%lx) in the middle\n", vma->vm_start);
+                    curr_node->prev->next = &new_node; 
+                    new_node.next = curr_node;
+                    new_node.prev = curr_node->prev;
+                    curr_node->prev = &new_node;
+                    break;
+                }
+            }
+        }
+    }
+}
+
 /*
  * vma has some anon_vma assigned, and is already inserted on that
  * anon_vma's interval trees.
@@ -571,6 +602,12 @@ void __vma_link_rb(struct mm_struct *mm, struct vm_area_struct *vma,
 	vma->rb_subtree_gap = 0;
 	vma_gap_update(vma);
 	vma_rb_insert(vma, &mm->mm_rb);
+    
+    // SWAPNIL TODO: Add if global
+    if(PAGE_GLOBAL(vma->vm_start)) {
+    	vma_rb_insert(vma, &global_vma_rb);
+        vmlist_insert(vma, &vm_global_list);
+    }
 }
 
 static void __vma_link_file(struct vm_area_struct *vma)
@@ -1670,6 +1707,7 @@ unsigned long mmap_region(struct file *file, unsigned long addr,
 	 * specific mapper. the address has already been validated, but
 	 * not unmapped, but the maps are removed from the list.
 	 */
+    // SWAPNIL: This is only where a new VMA_struct object is allocated
 	vma = kmem_cache_zalloc(vm_area_cachep, GFP_KERNEL);
 	if (!vma) {
 		error = -ENOMEM;
@@ -1682,6 +1720,7 @@ unsigned long mmap_region(struct file *file, unsigned long addr,
 	vma->vm_flags = vm_flags;
 	vma->vm_page_prot = vm_get_page_prot(vm_flags);
 	vma->vm_pgoff = pgoff;
+    vma->global = PAGE_GLOBAL(addr);
 	INIT_LIST_HEAD(&vma->anon_vma_chain);
 
 	if (file) {
@@ -1723,6 +1762,8 @@ unsigned long mmap_region(struct file *file, unsigned long addr,
 			goto free_vma;
 	}
 
+
+    //SWAPNIL: VMA_linked here which populates mm_rb and global_vma_rb
 	vma_link(mm, vma, prev, rb_link, rb_parent);
 	/* Once vma denies write, undo our temporary denial count */
 	if (file) {
@@ -1778,6 +1819,51 @@ unacct_error:
 	if (charged)
 		vm_unacct_memory(charged);
 	return error;
+}
+
+// Swapnil: This finds a suitable gap in the high space
+unsigned long unmapped_area_global(struct vm_unmapped_area_info *info)
+{
+	/*
+	 * We implement the search by looking adding a new head node to the top of our
+        address space	 */
+
+
+    // TODO Add asserts to check info limits
+
+	unsigned long length, low_limit, high_limit, gap_start, gap_end;
+
+	/* Adjust search length to account for worst case alignment overhead */
+	length = info->length + info->align_mask;
+	if (length < info->length)
+		return -ENOMEM;
+
+	/* Adjust search limits by the desired length */
+	if (info->high_limit < length)
+		return -ENOMEM;
+	high_limit = info->high_limit - length;
+
+	if (info->low_limit > high_limit)
+		return -ENOMEM;
+	low_limit = info->low_limit + length;
+
+	/* Check if rbtree root looks promising */
+	if (VMLIST_EMPTY_ROOT(&vm_global_list))
+        gap_start = info->low_limit + 4096;
+
+    else 
+        gap_start = vm_global_list.vmlist_node->vma->vm_end + 4096; // Keeping a guard gap 
+
+	/* We found a suitable gap. Clip it with the original low_limit. */
+	if (gap_start < info->low_limit)
+		gap_start = info->low_limit;
+
+	/* Adjust gap address to the desired alignment */
+	gap_start += (info->align_offset - gap_start) & info->align_mask;
+
+	VM_BUG_ON(gap_start + info->length > info->high_limit);
+	VM_BUG_ON(gap_start + info->length > gap_end);
+	return gap_start;
 }
 
 unsigned long unmapped_area(struct vm_unmapped_area_info *info)
@@ -2026,6 +2112,8 @@ arch_get_unmapped_area(struct file *filp, unsigned long addr,
 }
 #endif
 
+
+//Swapnil: Change a lot of code below this
 /*
  * This mmap-allocator allocates new areas top-down from below the
  * stack's low limit (the base):
@@ -2160,6 +2248,50 @@ struct vm_area_struct *find_vma(struct mm_struct *mm, unsigned long addr)
 }
 
 EXPORT_SYMBOL(find_vma);
+
+/* Look up the first global VMA which satisfies  addr < vm_end,  
+NULL if none. */
+
+struct vm_area_struct *find_global_vma(struct mm_struct *mm,
+    unsigned long addr)
+{
+	struct rb_node *rb_node;
+	struct vm_area_struct *vma;
+
+	// Check the cache first. 
+// Swapnil: TODO FIXME enable vma global cache
+/*	vma = vmaglobalcache_find(mm, addr);
+	if (likely(vma))
+		return vma;
+*/
+	rb_node = global_vma_rb.rb_node;
+
+	while (rb_node) {
+		struct vm_area_struct *tmp;
+
+        // Swapnil: This returns the outer vma_struct to which rb_node belongs.
+        // Works by calculating the offset of member vm_rb from base of vm_area_struct
+        // and subtracting this offset from rb_node to get to parent vm_area_struct
+		tmp = rb_entry(rb_node, struct vm_area_struct, vm_rb);
+
+		if (tmp->vm_end > addr) {
+			vma = tmp;
+			if (tmp->vm_start <= addr)
+				break;
+			rb_node = rb_node->rb_left;
+		} else
+			rb_node = rb_node->rb_right;
+	}
+
+// Swapnil: TODO FIXME enable vma global cache
+/*	if (vma)
+		vmaglobalcache_update(addr, vma);
+*/
+	return vma;
+}
+
+EXPORT_SYMBOL(find_global_vma);
+
 
 /*
  * Same as find_vma, but also return a pointer to the previous VMA in *pprev.

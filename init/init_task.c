@@ -2,6 +2,8 @@
 #include <linux/init_task.h>
 #include <linux/export.h>
 #include <linux/mqueue.h>
+#include <linux/rbtree.h>
+#include <linux/vmlist.h>
 #include <linux/sched.h>
 #include <linux/sched/sysctl.h>
 #include <linux/sched/rt.h>
@@ -9,6 +11,7 @@
 #include <linux/init.h>
 #include <linux/fs.h>
 #include <linux/mm.h>
+#include <linux/mm_types.h>
 
 #include <asm/pgtable.h>
 #include <linux/uaccess.h>
@@ -177,6 +180,14 @@ struct task_struct init_task
 #endif
 };
 EXPORT_SYMBOL(init_task);
+
+// Swapnil: RB tree of all global vmas
+struct rb_root global_vma_rb;
+EXPORT_SYMBOL(global_vma_rb);
+
+/* linked list of VM areas per task, sorted by address */
+struct vmlist_root vm_global_list = VMLIST_ROOT;
+EXPORT_SYMBOL(vm_global_list);
 
 /*
  * Initial thread structure. Alignment of this is handled by a special

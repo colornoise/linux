@@ -60,6 +60,9 @@
 #define PTR_ALIGN(p, a)		((typeof(p))ALIGN((unsigned long)(p), (a)))
 #define IS_ALIGNED(x, a)		(((x) & ((typeof(x))(a) - 1)) == 0)
 
+/* Swapnil: Our base address is derived from recently free kernel base */
+#define IS_GLOBAL(x) (x > DEFAULT_MAP_WINDOW )
+
 /* generic data direction definitions */
 #define READ			0
 #define WRITE			1

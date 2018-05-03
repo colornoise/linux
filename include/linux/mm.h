@@ -142,6 +142,9 @@ extern int overcommit_kbytes_handler(struct ctl_table *, int, void __user *,
 /* to align the pointer to the (next) page boundary */
 #define PAGE_ALIGN(addr) ALIGN(addr, PAGE_SIZE)
 
+/* to align the pointer to the (next) page boundary */
+#define PAGE_GLOBAL(addr) IS_GLOBAL(addr)
+
 /* test whether an address (unsigned long or pointer) is aligned to PAGE_SIZE */
 #define PAGE_ALIGNED(addr)	IS_ALIGNED((unsigned long)(addr), PAGE_SIZE)
 
@@ -2245,6 +2248,7 @@ extern unsigned long __must_check vm_mmap(struct file *, unsigned long,
 
 struct vm_unmapped_area_info {
 #define VM_UNMAPPED_AREA_TOPDOWN 1
+#define VM_UNMAPPED_AREA_GLOBAL 2
 	unsigned long flags;
 	unsigned long length;
 	unsigned long low_limit;
@@ -2255,7 +2259,9 @@ struct vm_unmapped_area_info {
 
 extern unsigned long unmapped_area(struct vm_unmapped_area_info *info);
 extern unsigned long unmapped_area_topdown(struct vm_unmapped_area_info *info);
+extern unsigned long unmapped_area_global(struct vm_unmapped_area_info *info);
 
+/* Swapnil: Jackpot. Address given here*/
 /*
  * Search for an unmapped address range.
  *
@@ -2270,6 +2276,8 @@ vm_unmapped_area(struct vm_unmapped_area_info *info)
 {
 	if (info->flags & VM_UNMAPPED_AREA_TOPDOWN)
 		return unmapped_area_topdown(info);
+	else if (info->flags & VM_UNMAPPED_AREA_GLOBAL) 
+		return unmapped_area_global(info);
 	else
 		return unmapped_area(info);
 }
@@ -2325,6 +2333,7 @@ extern int expand_upwards(struct vm_area_struct *vma, unsigned long address);
 
 /* Look up the first VMA which satisfies  addr < vm_end,  NULL if none. */
 extern struct vm_area_struct * find_vma(struct mm_struct * mm, unsigned long addr);
+extern struct vm_area_struct * find_global_vma(struct mm_struct * mm, unsigned long addr);
 extern struct vm_area_struct * find_vma_prev(struct mm_struct * mm, unsigned long addr,
 					     struct vm_area_struct **pprev);
 
@@ -2672,6 +2681,10 @@ void __init setup_nr_node_ids(void);
 #else
 static inline void setup_nr_node_ids(void) {}
 #endif
+
+//Swapnil: Making global_vma_rb visible
+extern struct rb_root global_vma_rb;
+extern struct vmlist_root vm_global_list;
 
 #endif /* __KERNEL__ */
 #endif /* _LINUX_MM_H */

@@ -90,6 +90,7 @@ unsigned long arch_mmap_rnd(void)
 	return arch_rnd(mmap_is_ia32() ? mmap32_rnd_bits : mmap64_rnd_bits);
 }
 
+// Swapnil: What is this now?
 static unsigned long mmap_base(unsigned long rnd, unsigned long task_size)
 {
 	unsigned long gap = rlimit(RLIMIT_STACK);
@@ -169,6 +170,8 @@ unsigned long get_mmap_base(int is_legacy)
 #endif
 	return is_legacy ? mm->mmap_legacy_base : mm->mmap_base;
 }
+
+// Swapnil: Decided not to add get_global_base for now
 
 const char *arch_vma_name(struct vm_area_struct *vma)
 {

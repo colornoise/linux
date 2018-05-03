@@ -280,8 +280,15 @@ struct vm_area_struct {
 
 	/* linked list of VM areas per task, sorted by address */
 	struct vm_area_struct *vm_next, *vm_prev;
-
+	
+    /* Rb node for local tree */
 	struct rb_node vm_rb;
+
+    /* Rb node for global tree */
+    // Let's try to see if we can reuse the above node.
+    // It is fine as either a node is global or local
+    // procfs only uses the linked list of vmas not rbtree
+    // struct rb_node vm_global_rb;
 
 	/*
 	 * Largest free memory gap in bytes to the left of this VMA.
@@ -333,6 +340,7 @@ struct vm_area_struct {
 	struct mempolicy *vm_policy;	/* NUMA policy for the VMA */
 #endif
 	struct vm_userfaultfd_ctx vm_userfaultfd_ctx;
+    bool global;                /* Is VMA part of global address space */
 } __randomize_layout;
 
 struct core_thread {

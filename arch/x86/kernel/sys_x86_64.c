@@ -121,11 +121,17 @@ static void find_start_end(unsigned long addr, unsigned long flags,
 		return;
 	}
 
-	*begin	= get_mmap_base(1);
-	if (in_compat_syscall())
-		*end = task_size_32bit();
-	else
-		*end = task_size_64bit(addr > DEFAULT_MAP_WINDOW);
+    if (flags & MAP_SPECIAL) {
+       *begin = DEFAULT_MAP_WINDOW; 
+       *end = GLOBAL_MAP_WINDOW;
+    }
+    else {
+        *begin	= get_mmap_base(1);
+        if (in_compat_syscall())
+            *end = task_size_32bit();
+        else
+            *end = task_size_64bit(addr > DEFAULT_MAP_WINDOW);
+    }
 }
 
 unsigned long
@@ -144,20 +150,40 @@ arch_get_unmapped_area(struct file *filp, unsigned long addr,
 	if (flags & MAP_FIXED)
 		return addr;
 
+    //Swapnil: Basically just update begin end here depending on incoming flags
 	find_start_end(addr, flags, &begin, &end);
 
 	if (len > end)
 		return -ENOMEM;
 
+    // First check if local mapping is not in higher space
+    if (PAGE_GLOBAL(addr) && ((flags & MAP_SPECIAL) == 0)){
+        addr = 0;
+    }
+
 	if (addr) {
-		addr = PAGE_ALIGN(addr);
-		vma = find_vma(mm, addr);
-		if (end - len >= addr &&
-		    (!vma || addr + len <= vm_start_gap(vma)))
-			return addr;
-	}
+        addr = PAGE_ALIGN(addr);
+        // Swapnil: Check against all global vmas or only against local vmas
+        if (!PAGE_GLOBAL(addr)) {
+            vma = find_vma(mm, addr);
+            if (end - len >= addr &&
+                (!vma || addr + len <= vm_start_gap(vma)))
+                return addr;
+        } else {
+            vma = find_global_vma(mm, addr);
+            if (end - len >= addr &&
+                    (!vma || addr + len <= vm_start_gap(vma)))
+                // Swapnil: vm_start_gap returns vm_start
+                return addr;
+        }
+    }
 
 	info.flags = 0;
+
+    if (flags & MAP_SPECIAL) {
+        info.flags = VM_UNMAPPED_AREA_GLOBAL;
+    }
+
 	info.length = len;
 	info.low_limit = begin;
 	info.high_limit = end;
@@ -197,31 +223,56 @@ arch_get_unmapped_area_topdown(struct file *filp, const unsigned long addr0,
 		goto bottomup;
 
 	/* requesting a specific address */
-	if (addr) {
-		addr &= PAGE_MASK;
-		if (!mmap_address_hint_valid(addr, len))
-			goto get_unmapped_area;
+    // First check if local mapping is not in higher space
+    if (PAGE_GLOBAL(addr) && ((flags & MAP_SPECIAL) == 0)){
+        addr = 0;
+    }
 
-		vma = find_vma(mm, addr);
-		if (!vma || addr + len <= vm_start_gap(vma))
-			return addr;
+	if (addr) {
+        if (flags & MAP_SPECIAL) {
+            addr &= PAGE_MASK;
+            if (!mmap_address_hint_valid(addr, len))
+                goto get_unmapped_area;
+
+            vma = find_global_vma(mm, addr);
+            if (!vma || addr + len <= vm_start_gap(vma))
+                return addr;
+        } else {
+            addr &= PAGE_MASK;
+            if (!mmap_address_hint_valid(addr, len))
+                goto get_unmapped_area;
+
+            vma = find_vma(mm, addr);
+            if (!vma || addr + len <= vm_start_gap(vma))
+                return addr;
+        }
 	}
 get_unmapped_area:
 
 	info.flags = VM_UNMAPPED_AREA_TOPDOWN;
+    if (flags & MAP_SPECIAL) {
+        info.flags = info.flags | VM_UNMAPPED_AREA_GLOBAL;
+    }
 	info.length = len;
-	info.low_limit = PAGE_SIZE;
-	info.high_limit = get_mmap_base(0);
-
+    if (flags & MAP_SPECIAL) {
+        info.low_limit = DEFAULT_MAP_WINDOW; 
+        info.high_limit = GLOBAL_MAP_WINDOW;
+    } else {
+        info.low_limit = PAGE_SIZE;
+        info.high_limit = get_mmap_base(0);
+    }
 	/*
 	 * If hint address is above DEFAULT_MAP_WINDOW, look for unmapped area
 	 * in the full address space.
 	 *
 	 * !in_compat_syscall() check to avoid high addresses for x32.
 	 */
-	if (addr > DEFAULT_MAP_WINDOW && !in_compat_syscall())
-		info.high_limit += TASK_SIZE_MAX - DEFAULT_MAP_WINDOW;
-
+    if (flags & MAP_SPECIAL) {
+        //SWAPNIL: Add some check here
+    } else {
+        if (addr > DEFAULT_MAP_WINDOW && !in_compat_syscall())
+            info.high_limit += TASK_SIZE_MAX - DEFAULT_MAP_WINDOW;
+    }
 	info.align_mask = 0;
 	info.align_offset = pgoff << PAGE_SHIFT;
 	if (filp) {

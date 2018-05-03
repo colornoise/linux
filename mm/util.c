@@ -290,6 +290,7 @@ int vma_is_stack_for_current(struct vm_area_struct *vma)
 void arch_pick_mmap_layout(struct mm_struct *mm)
 {
 	mm->mmap_base = TASK_UNMAPPED_BASE;
+	mm->global_mmap_base = GLOBAL_UNMAPPED_BASE;
 	mm->get_unmapped_area = arch_get_unmapped_area;
 }
 #endif
