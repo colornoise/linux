@@ -481,6 +481,7 @@ __always_inline void vmlist_insert(struct vm_area_struct *vma,
                     curr_node->prev = &new_node;
                     break;
                 }
+                curr_node = curr_node->next;
             }
         }
     }
@@ -604,10 +605,11 @@ void __vma_link_rb(struct mm_struct *mm, struct vm_area_struct *vma,
 	vma_rb_insert(vma, &mm->mm_rb);
     
     // SWAPNIL TODO: Add if global
-    if(PAGE_GLOBAL(vma->vm_start)) {
+    if(PAGE_GLOBAL_SHARED(vma->vm_start)) {
     	vma_rb_insert(vma, &global_vma_rb);
         vmlist_insert(vma, &vm_global_list);
     }
+
 }
 
 static void __vma_link_file(struct vm_area_struct *vma)
@@ -1720,7 +1722,7 @@ unsigned long mmap_region(struct file *file, unsigned long addr,
 	vma->vm_flags = vm_flags;
 	vma->vm_page_prot = vm_get_page_prot(vm_flags);
 	vma->vm_pgoff = pgoff;
-    vma->global = PAGE_GLOBAL(addr);
+    vma->global = PAGE_GLOBAL_SHARED(addr);
 	INIT_LIST_HEAD(&vma->anon_vma_chain);
 
 	if (file) {

@@ -157,14 +157,14 @@ arch_get_unmapped_area(struct file *filp, unsigned long addr,
 		return -ENOMEM;
 
     // First check if local mapping is not in higher space
-    if (PAGE_GLOBAL(addr) && ((flags & MAP_SPECIAL) == 0)){
+    if (PAGE_GLOBAL_SHARED(addr) && ((flags & MAP_SPECIAL) == 0)){
         addr = 0;
     }
 
 	if (addr) {
         addr = PAGE_ALIGN(addr);
         // Swapnil: Check against all global vmas or only against local vmas
-        if (!PAGE_GLOBAL(addr)) {
+        if (!PAGE_GLOBAL_SHARED(addr)) {
             vma = find_vma(mm, addr);
             if (end - len >= addr &&
                 (!vma || addr + len <= vm_start_gap(vma)))
@@ -224,7 +224,7 @@ arch_get_unmapped_area_topdown(struct file *filp, const unsigned long addr0,
 
 	/* requesting a specific address */
     // First check if local mapping is not in higher space
-    if (PAGE_GLOBAL(addr) && ((flags & MAP_SPECIAL) == 0)){
+    if (PAGE_GLOBAL_SHARED(addr) && ((flags & MAP_SPECIAL) == 0)){
         addr = 0;
     }
 

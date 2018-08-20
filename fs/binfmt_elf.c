@@ -973,8 +973,11 @@ static int load_elf_binary(struct linux_binprm *bprm)
 			 */
 			if (elf_interpreter) {
 				load_bias = ELF_ET_DYN_BASE;
-				if (current->flags & PF_RANDOMIZE)
+                printk("load_bias:%lx ", load_bias);
+				if (current->flags & PF_RANDOMIZE) {
 					load_bias += arch_mmap_rnd();
+                    printk(" ---------  load_bias:%lx\n", load_bias);
+                }
 				elf_flags |= MAP_FIXED;
 			} else
 				load_bias = 0;
@@ -995,7 +998,9 @@ static int load_elf_binary(struct linux_binprm *bprm)
 				goto out_free_dentry;
 			}
 		}
-
+        
+        printk("in elf_map: ELF_ET_DYN_BASE:%lx, TASK_SIZE:%lx\n", ELF_ET_DYN_BASE, TASK_SIZE);
+        printk("in elf_map: load_bias:%lx, vaddr:%lx\n", load_bias, vaddr);
 		error = elf_map(bprm->file, load_bias + vaddr, elf_ppnt,
 				elf_prot, elf_flags, total_size);
 		if (BAD_ADDR(error)) {

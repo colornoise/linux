@@ -208,7 +208,7 @@ extern int elf_core_copy_fpregs(struct task_struct *t, elf_fpregset_t *fpu);
 
 #define ELF_EXEC_PAGESIZE 4096
 
-#define ELF_ET_DYN_BASE (TASK_SIZE / 3 * 2)
+#define ELF_ET_DYN_BASE PAGE_ALIGN(2 * DEFAULT_MAP_WINDOW / 3 )
 
 extern long elf_aux_hwcap;
 #define ELF_HWCAP (elf_aux_hwcap)

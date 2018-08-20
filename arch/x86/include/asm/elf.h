@@ -253,7 +253,7 @@ extern int force_personality32;
  * space open for things that want to use the area for 32-bit pointers.
  */
 #define ELF_ET_DYN_BASE		(mmap_is_ia32() ? 0x000400000UL : \
-						  (DEFAULT_MAP_WINDOW / 3 * 2))
+						  PAGE_ALIGN(2 * DEFAULT_MAP_WINDOW / 3))
 
 /* This yields a mask that user programs can use to figure out what
    instruction set this CPU supports.  This could be done in user space,
@@ -349,7 +349,7 @@ if (test_thread_flag(TIF_X32))						\
 else									\
 	ARCH_DLINFO_IA32
 
-#define COMPAT_ELF_ET_DYN_BASE	(TASK_UNMAPPED_BASE + 0x1000000)
+#define COMPAT_ELF_ET_DYN_BASE	(PAGE_ALIGN(DEFAULT_MAP_WINDOW / 3)+ 0x1000000)
 
 #endif /* !CONFIG_X86_32 */
 

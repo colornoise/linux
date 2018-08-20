@@ -875,11 +875,14 @@ static inline void spin_lock_prefetch(const void *x)
  *
  * With page table isolation enabled, we map the LDT in ... [stay tuned]
  */
+
+#define PRIVATE_AS_BITS 43
+
 #define TASK_SIZE_MAX	((1UL << __VIRTUAL_MASK_SHIFT) - PAGE_SIZE)
 
 // Swapnil: THIS IS WHERE EVERYTHING HAPPENS!!
 #define GLOBAL_MAP_WINDOW	((1UL << 47) - PAGE_SIZE)
-#define DEFAULT_MAP_WINDOW	((1UL << 40) - PAGE_SIZE)
+#define DEFAULT_MAP_WINDOW	((1UL << PRIVATE_AS_BITS) - PAGE_SIZE)
 
 /* This decides where the kernel will search for a free chunk of vm
  * space during mmap's.
@@ -895,7 +898,7 @@ static inline void spin_lock_prefetch(const void *x)
 					IA32_PAGE_OFFSET : TASK_SIZE_MAX)
 
 #define STACK_TOP		TASK_SIZE_LOW
-#define STACK_TOP_MAX		TASK_SIZE_MAX
+#define STACK_TOP_MAX   STACK_TOP	
 
 #define INIT_THREAD  {						\
 	.addr_limit		= KERNEL_DS,			\
